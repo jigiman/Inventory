@@ -40,7 +40,7 @@ export default function Dashboard() {
           api.getProducts()
         ]);
         setStats(dashData);
-        setProducts(prodData);
+        setProducts(prodData.items);
       } catch (err: any) {
         setError(err.message || 'Failed to fetch dashboard data');
       } finally {

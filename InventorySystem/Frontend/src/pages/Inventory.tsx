@@ -284,7 +284,7 @@ export default function Inventory() {
                       </tr>
                     );
                   })}
-                  {filteredSortedLedger.length === 0 && (
+                  {paginatedLedger.length === 0 && (
                     <tr>
                       <td colSpan={8} className="py-12 text-center text-slate-400 font-medium">
                         No ledger transactions found matching your search.
