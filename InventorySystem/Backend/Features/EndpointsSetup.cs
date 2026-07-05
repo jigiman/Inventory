@@ -52,6 +52,44 @@ public static class EndpointsSetup
         });
 
         // =========================================================================
+        // CUSTOMERS
+        // =========================================================================
+        app.MapGet("/api/customers", async (AppDbContext db) =>
+            await db.Customers.ToListAsync());
+
+        app.MapPost("/api/customers", async (AppDbContext db, Customer customer) =>
+        {
+            if (string.IsNullOrWhiteSpace(customer.Name))
+                return Results.BadRequest("Name is required");
+            db.Customers.Add(customer);
+            await db.SaveChangesAsync();
+            return Results.Created($"/api/customers/{customer.Id}", customer);
+        });
+
+        app.MapPut("/api/customers/{id:int}", async (AppDbContext db, int id, Customer input) =>
+        {
+            var customer = await db.Customers.FindAsync(id);
+            if (customer == null) return Results.NotFound();
+            customer.Name = input.Name;
+            customer.ContactPerson = input.ContactPerson;
+            customer.Phone = input.Phone;
+            customer.Email = input.Email;
+            customer.Address = input.Address;
+            customer.Notes = input.Notes;
+            await db.SaveChangesAsync();
+            return Results.Ok(customer);
+        });
+
+        app.MapDelete("/api/customers/{id:int}", async (AppDbContext db, int id) =>
+        {
+            var customer = await db.Customers.FindAsync(id);
+            if (customer == null) return Results.NotFound();
+            db.Customers.Remove(customer);
+            await db.SaveChangesAsync();
+            return Results.NoContent();
+        });
+
+        // =========================================================================
         // BRANDS
         // =========================================================================
         app.MapGet("/api/brands", async (AppDbContext db) => 
@@ -83,6 +121,45 @@ public static class EndpointsSetup
             db.Brands.Remove(brand);
             await db.SaveChangesAsync();
             return Results.NoContent();
+        });
+
+        // =========================================================================
+        // SALES
+        // =========================================================================
+        app.MapGet("/api/sales", async (AppDbContext db) =>
+            await db.Sales
+                .Include(s => s.Customer)
+                .Include(s => s.Items)
+                    .ThenInclude(si => si.Product)
+                .ToListAsync());
+
+        app.MapPost("/api/sales", async (AppDbContext db, InventoryService invService, Sale sale) =>
+        {
+            if (sale.CustomerId <= 0)
+                return Results.BadRequest("Customer is required");
+            if (sale.Items == null || sale.Items.Count == 0)
+                return Results.BadRequest("Sale must contain at least one item");
+
+            sale.SaleNumber = $"SL-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString()[..4].ToUpper()}";
+            sale.SaleDate = DateTime.UtcNow;
+            sale.Status = "Completed";
+
+            db.Sales.Add(sale);
+
+            foreach (var item in sale.Items)
+            {
+                // Record stock transaction (Outgoing)
+                await invService.RecordTransactionAsync(
+                    item.ProductId,
+                    "Sale",
+                    0,
+                    item.Quantity,
+                    $"Sale Ref: {sale.SaleNumber}"
+                );
+            }
+
+            await db.SaveChangesAsync();
+            return Results.Created($"/api/sales/{sale.Id}", sale);
         });
 
         // =========================================================================
@@ -449,6 +526,81 @@ public static class EndpointsSetup
         });
 
         // =========================================================================
+        // =========================================================================
+        // FINANCE & PAYMENTS
+        // =========================================================================
+        app.MapGet("/api/finance/debtors", async (AppDbContext db) =>
+        {
+            var sales = await db.Sales
+                .GroupBy(s => s.CustomerId)
+                .Select(g => new { CustomerId = g.Key, TotalSales = g.Sum(s => s.TotalAmount) })
+                .ToListAsync();
+
+            var payments = await db.Payments
+                .Where(p => p.CustomerId != null)
+                .GroupBy(p => p.CustomerId)
+                .Select(g => new { CustomerId = g.Key.Value, TotalPaid = g.Sum(p => p.Amount) })
+                .ToListAsync();
+
+            var customers = await db.Customers.ToListAsync();
+
+            var report = customers.Select(c => {
+                var totalSales = sales.FirstOrDefault(s => s.CustomerId == c.Id)?.TotalSales ?? 0;
+                var totalPaid = payments.FirstOrDefault(p => p.CustomerId == c.Id)?.TotalPaid ?? 0;
+                return new {
+                    Customer = c,
+                    TotalSales = totalSales,
+                    TotalPaid = totalPaid,
+                    Balance = totalSales - totalPaid
+                };
+            }).Where(r => r.Balance != 0).ToList();
+
+            return Results.Ok(report);
+        });
+
+        app.MapGet("/api/finance/creditors", async (AppDbContext db) =>
+        {
+            var purchases = await db.PurchaseOrders
+                .GroupBy(po => po.SupplierId)
+                .Select(g => new { SupplierId = g.Key, TotalPurchases = g.Sum(po => po.TotalAmount) })
+                .ToListAsync();
+
+            var payments = await db.Payments
+                .Where(p => p.SupplierId != null)
+                .GroupBy(p => p.SupplierId)
+                .Select(g => new { SupplierId = g.Key.Value, TotalPaid = g.Sum(p => p.Amount) })
+                .ToListAsync();
+
+            var suppliers = await db.Suppliers.ToListAsync();
+
+            var report = suppliers.Select(s => {
+                var totalPurchases = purchases.FirstOrDefault(p => p.SupplierId == s.Id)?.TotalPurchases ?? 0;
+                var totalPaid = payments.FirstOrDefault(p => p.SupplierId == s.Id)?.TotalPaid ?? 0;
+                return new {
+                    Supplier = s,
+                    TotalPurchases = totalPurchases,
+                    TotalPaid = totalPaid,
+                    Balance = totalPurchases - totalPaid
+                };
+            }).Where(r => r.Balance != 0).ToList();
+
+            return Results.Ok(report);
+        });
+
+        app.MapPost("/api/payments", async (AppDbContext db, Payment payment) =>
+        {
+            if (payment.Amount <= 0)
+                return Results.BadRequest("Amount must be greater than zero");
+            if (payment.CustomerId == null && payment.SupplierId == null)
+                return Results.BadRequest("Customer or Supplier is required");
+
+            payment.PaymentDate = DateTime.UtcNow;
+            db.Payments.Add(payment);
+            await db.SaveChangesAsync();
+            return Results.Created($"/api/payments/{payment.Id}", payment);
+        });
+
+        // =========================================================================
         // REPORTS & DASHBOARD
         // =========================================================================
         app.MapGet("/api/reports/dashboard", async (AppDbContext db) =>
@@ -458,6 +610,23 @@ public static class EndpointsSetup
             var totalValue = await db.Products.SumAsync(p => p.CurrentQuantity * p.CostPrice);
             var lowStockCount = await db.Products.CountAsync(p => p.IsActive && p.CurrentQuantity <= p.ReorderLevel && p.CurrentQuantity > 0);
             var outOfStockCount = await db.Products.CountAsync(p => p.IsActive && p.CurrentQuantity <= 0);
+
+            // Debtor/Creditor KPIs - Sum of all positive outstanding balances
+            var debtorBalances = await db.Customers
+                .Select(c => new {
+                    SalesTotal = db.Sales.Where(s => s.CustomerId == c.Id).Sum(s => s.TotalAmount),
+                    PaymentsTotal = db.Payments.Where(p => p.CustomerId == c.Id).Sum(p => p.Amount)
+                })
+                .ToListAsync();
+            var totalDebtors = debtorBalances.Sum(x => Math.Max(0, x.SalesTotal - x.PaymentsTotal));
+
+            var creditorBalances = await db.Suppliers
+                .Select(s => new {
+                    PurchasesTotal = db.PurchaseOrders.Where(po => po.SupplierId == s.Id).Sum(po => po.TotalAmount),
+                    PaymentsTotal = db.Payments.Where(p => p.SupplierId == s.Id).Sum(p => p.Amount)
+                })
+                .ToListAsync();
+            var totalCreditors = creditorBalances.Sum(x => Math.Max(0, x.PurchasesTotal - x.PaymentsTotal));
 
             var recentTransactions = await db.StockTransactions
                 .Include(t => t.Product)
@@ -480,6 +649,8 @@ public static class EndpointsSetup
                 TotalValue = totalValue,
                 LowStockCount = lowStockCount,
                 OutOfStockCount = outOfStockCount,
+                TotalDebtors = totalDebtors,
+                TotalCreditors = totalCreditors,
                 RecentTransactions = recentTransactions
             });
         });
