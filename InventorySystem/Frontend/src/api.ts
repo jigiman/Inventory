@@ -143,12 +143,16 @@ export const api = {
   getLauncherStatus: () => request<{
     status: 'NOT_INITIALIZED' | 'READY';
     recentDatabases: { name: string; path: string; lastOpened: string }[];
+    theme: 'light' | 'dark';
   }>('/api/launcher'),
   openDatabase: (dbPath: string) => request<{ status: string; dbPath: string }>('/api/launcher/open', {
     method: 'POST', body: JSON.stringify({ dbPath }),
   }),
   createDatabase: (dbPath: string, name?: string) => request<{ status: string; dbPath: string; name: string }>('/api/launcher/new', {
     method: 'POST', body: JSON.stringify({ dbPath, name }),
+  }),
+  saveTheme: (theme: 'light' | 'dark') => request<{ theme: 'light' | 'dark' }>('/api/launcher/theme', {
+    method: 'POST', body: JSON.stringify({ theme }),
   }),
 
   // Categories

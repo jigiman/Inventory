@@ -21,7 +21,7 @@ import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import Launcher from './pages/Launcher';
 import { api } from './api';
-import { getTheme, toggleTheme } from './utils/theme';
+import { getTheme, setTheme } from './utils/theme';
 import type { Theme } from './utils/theme';
 
 export default function App() {
@@ -29,6 +29,20 @@ export default function App() {
   const [darkMode, setDarkMode] = useState<Theme>(() => getTheme());
   const [storeName, setStoreName] = useState('Inventory Pro');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
+  // Synchronize DOM with theme state
+  useEffect(() => {
+    setTheme(darkMode);
+  }, [darkMode]);
+
+  const handleThemeChange = async (newTheme: Theme) => {
+    setDarkMode(newTheme);
+    try {
+      await api.saveTheme(newTheme);
+    } catch (e) {
+      console.error('Failed to save theme to backend:', e);
+    }
+  };
 
   // Launcher / DB selection state
   type LauncherStatus = 'checking' | 'NOT_INITIALIZED' | 'READY';
@@ -45,6 +59,9 @@ export default function App() {
           if (!cancelled) {
             setRecentDatabases(res.recentDatabases);
             setLauncherStatus(res.status);
+            if (res.theme === 'light' || res.theme === 'dark') {
+              setDarkMode(res.theme);
+            }
           }
           return;
         } catch {
@@ -99,6 +116,8 @@ export default function App() {
         <Launcher
           recentDatabases={recentDatabases}
           onReady={() => setLauncherStatus('READY')}
+          theme={darkMode}
+          onThemeChange={handleThemeChange}
         />
       )}
 
@@ -127,10 +146,10 @@ export default function App() {
         </div>
         <div>
           <button 
-            onClick={() => setDarkMode(!darkMode)} 
+            onClick={() => handleThemeChange(darkMode === 'dark' ? 'light' : 'dark')} 
             className="rounded-xl p-2.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-slate-100 transition-all duration-300 cursor-pointer shadow-sm border border-slate-200/30 dark:border-slate-800"
           >
-            {darkMode ? <Sun size={18} /> : <Moon size={18} />}
+            {darkMode === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
           </button>
         </div>
       </header>

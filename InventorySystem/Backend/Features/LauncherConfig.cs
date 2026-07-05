@@ -19,6 +19,9 @@ public class LauncherConfig
     [JsonPropertyName("recentDatabases")]
     public List<RecentDatabase> RecentDatabases { get; set; } = [];
 
+    [JsonPropertyName("theme")]
+    public string Theme { get; set; } = "light";
+
     // ── static helpers ────────────────────────────────────────────────────────
 
     private static readonly JsonSerializerOptions _json = new()

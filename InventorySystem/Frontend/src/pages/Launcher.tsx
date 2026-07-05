@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { FolderOpen, Plus, Database, Clock, ChevronRight, AlertCircle, Loader2, Package } from 'lucide-react';
+import { useState } from 'react';
+import { FolderOpen, Plus, Database, Clock, ChevronRight, AlertCircle, Loader2, Package, Sun, Moon } from 'lucide-react';
 import { api } from '../api';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { pickOpenFile, pickSaveFile, isPhotino } from '../utils/photino';
+import type { Theme } from '../utils/theme';
 
 interface RecentDatabase {
   name: string;
@@ -14,6 +15,8 @@ interface RecentDatabase {
 interface LauncherProps {
   recentDatabases: RecentDatabase[];
   onReady: () => void;
+  theme: Theme;
+  onThemeChange: (theme: Theme) => void;
 }
 
 type Tab = 'recent' | 'new';
@@ -26,7 +29,7 @@ function formatDate(iso: string) {
   });
 }
 
-export default function Launcher({ recentDatabases, onReady }: LauncherProps) {
+export default function Launcher({ recentDatabases, onReady, theme, onThemeChange }: LauncherProps) {
   const [tab, setTab] = useState<Tab>(recentDatabases.length > 0 ? 'recent' : 'new');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -85,12 +88,23 @@ export default function Launcher({ recentDatabases, onReady }: LauncherProps) {
   const inPhotino = isPhotino();
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-gradient-to-br from-slate-950 via-[#0d1220] to-indigo-950">
+    <div className="fixed inset-0 flex items-center justify-center bg-gradient-to-br from-slate-50 via-slate-100/50 to-indigo-50 dark:from-slate-950 dark:via-[#0d1220] dark:to-indigo-950 transition-colors duration-300">
+      {/* Floating theme toggle */}
+      <div className="absolute top-6 right-6 z-20">
+        <button
+          onClick={() => onThemeChange(theme === 'dark' ? 'light' : 'dark')}
+          className="rounded-xl p-2.5 bg-white/80 dark:bg-slate-900/80 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 border border-slate-200/80 dark:border-slate-800/80 shadow-md backdrop-blur-md transition-all duration-300 cursor-pointer hover:scale-105 active:scale-95"
+          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
+      </div>
+
       {/* Ambient blobs */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 -left-40 h-96 w-96 rounded-full bg-indigo-600/20 blur-3xl" />
-        <div className="absolute -bottom-40 -right-40 h-96 w-96 rounded-full bg-violet-600/15 blur-3xl" />
-        <div className="absolute top-1/2 left-1/2 h-64 w-64 -translate-x-1/2 -translate-y-1/2 rounded-full bg-indigo-500/10 blur-2xl" />
+        <div className="absolute -top-40 -left-40 h-96 w-96 rounded-full bg-indigo-600/10 dark:bg-indigo-600/20 blur-3xl" />
+        <div className="absolute -bottom-40 -right-40 h-96 w-96 rounded-full bg-violet-600/5 dark:bg-violet-600/15 blur-3xl" />
+        <div className="absolute top-1/2 left-1/2 h-64 w-64 -translate-x-1/2 -translate-y-1/2 rounded-full bg-indigo-500/5 dark:bg-indigo-500/10 blur-2xl" />
       </div>
 
       <div className="relative z-10 w-full max-w-lg animate-in">
@@ -99,14 +113,14 @@ export default function Launcher({ recentDatabases, onReady }: LauncherProps) {
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-600 shadow-2xl shadow-indigo-500/40">
             <Package size={32} className="text-white" />
           </div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-white">Inventory Pro</h1>
-          <p className="mt-1.5 text-sm text-slate-400">Select or create a database to get started</p>
+          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">Inventory Pro</h1>
+          <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">Select or create a database to get started</p>
         </div>
 
         {/* Card */}
-        <div className="rounded-3xl border border-white/10 bg-white/5 shadow-2xl shadow-black/50 backdrop-blur-2xl">
+        <div className="rounded-3xl border border-slate-200/80 dark:border-white/10 bg-white/80 dark:bg-white/5 shadow-2xl shadow-slate-200/50 dark:shadow-black/50 backdrop-blur-2xl">
           {/* Tab bar */}
-          <div className="flex border-b border-white/10">
+          <div className="flex border-b border-slate-200/80 dark:border-white/10">
             {[
               { id: 'recent' as Tab, label: 'Open Recent', icon: <Clock size={15} /> },
               { id: 'new' as Tab, label: 'New Database', icon: <Plus size={15} /> },
@@ -116,8 +130,8 @@ export default function Launcher({ recentDatabases, onReady }: LauncherProps) {
                 onClick={() => { setTab(t.id); setError(''); }}
                 className={`flex flex-1 items-center justify-center gap-2 py-4 text-sm font-semibold transition-all duration-200 cursor-pointer first:rounded-tl-3xl last:rounded-tr-3xl ${
                   tab === t.id
-                    ? 'bg-white/10 text-white'
-                    : 'text-slate-500 hover:text-slate-300'
+                    ? 'bg-slate-100/80 dark:bg-white/10 text-slate-900 dark:text-white'
+                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-300'
                 }`}
               >
                 {t.icon}
@@ -129,7 +143,7 @@ export default function Launcher({ recentDatabases, onReady }: LauncherProps) {
           <div className="p-6">
             {/* Error banner */}
             {error && (
-              <div className="mb-5 flex items-start gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3.5 text-sm text-rose-300">
+              <div className="mb-5 flex items-start gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3.5 text-sm text-rose-600 dark:text-rose-300">
                 <AlertCircle size={16} className="mt-0.5 shrink-0" />
                 <span>{error}</span>
               </div>
@@ -139,27 +153,27 @@ export default function Launcher({ recentDatabases, onReady }: LauncherProps) {
             {tab === 'recent' && (
               <div className="space-y-3">
                 {recentDatabases.length === 0 ? (
-                  <p className="py-6 text-center text-sm text-slate-500">No recent databases found.</p>
+                  <p className="py-6 text-center text-sm text-slate-555 dark:text-slate-500">No recent databases found.</p>
                 ) : (
                   recentDatabases.map((db) => (
                     <button
                       key={db.path}
                       onClick={() => handleOpen(db.path)}
                       disabled={loading}
-                      className="group flex w-full items-center gap-4 rounded-2xl border border-white/8 bg-white/5 p-4 text-left transition-all duration-200 hover:border-indigo-500/40 hover:bg-indigo-500/10 disabled:opacity-50 cursor-pointer"
+                      className="group flex w-full items-center gap-4 rounded-2xl border border-slate-200/60 dark:border-white/8 bg-white/40 dark:bg-white/5 p-4 text-left transition-all duration-200 hover:border-indigo-500/40 hover:bg-indigo-55/40 dark:hover:bg-indigo-500/10 disabled:opacity-50 cursor-pointer"
                     >
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-500/20 text-indigo-400 group-hover:bg-indigo-500/30 transition-colors">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-500/20 text-indigo-650 dark:text-indigo-400 group-hover:bg-indigo-500/30 transition-colors">
                         <Database size={18} />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate font-semibold text-slate-100">{db.name}</p>
-                        <p className="truncate text-xs text-slate-500">{db.path}</p>
-                        <p className="mt-0.5 text-xs text-slate-600">{formatDate(db.lastOpened)}</p>
+                        <p className="truncate font-semibold text-slate-800 dark:text-slate-100">{db.name}</p>
+                        <p className="truncate text-xs text-slate-500 dark:text-slate-555">{db.path}</p>
+                        <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-600">{formatDate(db.lastOpened)}</p>
                       </div>
                       {loading ? (
-                        <Loader2 size={16} className="shrink-0 animate-spin text-indigo-400" />
+                        <Loader2 size={16} className="shrink-0 animate-spin text-indigo-655 dark:text-indigo-400" />
                       ) : (
-                        <ChevronRight size={16} className="shrink-0 text-slate-600 transition-transform group-hover:translate-x-0.5 group-hover:text-indigo-400" />
+                        <ChevronRight size={16} className="shrink-0 text-slate-400 dark:text-slate-655 transition-transform group-hover:translate-x-0.5 group-hover:text-indigo-600 dark:group-hover:text-indigo-400" />
                       )}
                     </button>
                   ))
@@ -172,7 +186,7 @@ export default function Launcher({ recentDatabases, onReady }: LauncherProps) {
                     <button
                       onClick={handlePickOpen}
                       disabled={loading}
-                      className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/15 py-3 text-sm text-slate-500 transition-colors hover:border-indigo-500/40 hover:text-indigo-400 cursor-pointer disabled:opacity-40"
+                      className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 dark:border-white/15 py-3 text-sm text-slate-500 dark:text-slate-500 transition-colors hover:border-indigo-500/40 hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer disabled:opacity-40"
                     >
                       <FolderOpen size={15} />
                       Browse for another database…
@@ -182,7 +196,7 @@ export default function Launcher({ recentDatabases, onReady }: LauncherProps) {
                     !showOpenOther ? (
                       <button
                         onClick={() => setShowOpenOther(true)}
-                        className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/15 py-3 text-sm text-slate-500 transition-colors hover:border-indigo-500/40 hover:text-indigo-400 cursor-pointer"
+                        className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 dark:border-white/15 py-3 text-sm text-slate-500 dark:text-slate-500 transition-colors hover:border-indigo-500/40 hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer"
                       >
                         <FolderOpen size={15} />
                         Open from a different path…
@@ -216,7 +230,7 @@ export default function Launcher({ recentDatabases, onReady }: LauncherProps) {
               <div className="space-y-4">
                 {/* Save location picker */}
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-555 mb-2">
                     Save Location
                   </label>
                   {inPhotino ? (
@@ -226,16 +240,16 @@ export default function Launcher({ recentDatabases, onReady }: LauncherProps) {
                       disabled={loading}
                       className={`flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-sm transition-all duration-200 cursor-pointer disabled:opacity-40 ${
                         newPath
-                          ? 'border-indigo-500/40 bg-indigo-500/10 text-slate-200'
-                          : 'border-dashed border-white/20 text-slate-500 hover:border-indigo-500/40 hover:text-indigo-400'
+                          ? 'border-indigo-500/40 bg-indigo-55/40 dark:bg-indigo-500/10 text-slate-700 dark:text-slate-200'
+                          : 'border-dashed border-slate-300 dark:border-white/20 text-slate-500 dark:text-slate-500 hover:border-indigo-500/40 hover:text-indigo-600 dark:hover:text-indigo-400'
                       }`}
                     >
-                      <FolderOpen size={16} className={newPath ? 'text-indigo-400' : 'text-slate-600'} />
+                      <FolderOpen size={16} className={newPath ? 'text-indigo-500 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-600'} />
                       <span className="min-w-0 flex-1 truncate text-left">
                         {newPath || 'Choose where to save the database…'}
                       </span>
                       {newPath && (
-                        <span className="shrink-0 text-xs text-indigo-400 font-medium">Change</span>
+                        <span className="shrink-0 text-xs text-indigo-655 dark:text-indigo-400 font-medium">Change</span>
                       )}
                     </button>
                   ) : (
@@ -276,9 +290,9 @@ export default function Launcher({ recentDatabases, onReady }: LauncherProps) {
           </div>
         </div>
 
-        <p className="mt-6 text-center text-xs text-slate-600">
+        <p className="mt-6 text-center text-xs text-slate-550 dark:text-slate-600">
           Databases can be saved anywhere on your computer. Backups are stored in a{' '}
-          <code className="text-slate-500">Backups/</code> folder next to the database file.
+          <code className="text-slate-600 dark:text-slate-500">Backups/</code> folder next to the database file.
         </p>
       </div>
     </div>

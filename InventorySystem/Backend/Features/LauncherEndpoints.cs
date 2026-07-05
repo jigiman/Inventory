@@ -17,15 +17,31 @@ public static class LauncherEndpoints
     public static void MapLauncherEndpoints(this WebApplication app)
     {
         // ── GET /api/launcher ─────────────────────────────────────────────────
-        // Returns current status + list of recently used databases.
+        // Returns current status + list of recently used databases + current theme.
         app.MapGet("/api/launcher", (DatabaseState state) =>
         {
             var config = LauncherConfig.Load();
             return Results.Ok(new
             {
                 status = state.IsInitialized ? "READY" : "NOT_INITIALIZED",
-                recentDatabases = config.RecentDatabases
+                recentDatabases = config.RecentDatabases,
+                theme = config.Theme
             });
+        });
+
+        // ── POST /api/launcher/theme ───────────────────────────────────────────
+        // Saves the user's light/dark theme choice.
+        app.MapPost("/api/launcher/theme", (ThemeRequest req) =>
+        {
+            if (req.Theme != "light" && req.Theme != "dark")
+                return Results.BadRequest("Theme must be 'light' or 'dark'.");
+
+            var config = LauncherConfig.Load();
+            config.Theme = req.Theme;
+            config.Save();
+
+            Log.Information("Theme updated to {Theme}", req.Theme);
+            return Results.Ok(new { theme = config.Theme });
         });
 
         // ── POST /api/launcher/open ───────────────────────────────────────────
@@ -168,3 +184,4 @@ public static class LauncherEndpoints
 
 public record OpenDatabaseRequest(string DbPath);
 public record NewDatabaseRequest(string DbPath, string? Name);
+public record ThemeRequest(string Theme);
