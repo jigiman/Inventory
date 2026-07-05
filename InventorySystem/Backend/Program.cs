@@ -72,7 +72,9 @@ public class Program
         builder.Services.AddCors(options =>
         {
             options.AddDefaultPolicy(policy =>
-                policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
+                policy.WithOrigins("http://localhost:5173", "http://127.0.0.1")
+                      .AllowAnyHeader()
+                      .AllowAnyMethod());
         });
 
         builder.WebHost.UseUrls($"http://127.0.0.1:{port}");
