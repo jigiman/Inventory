@@ -76,7 +76,6 @@ export interface Product {
   currentQuantity: number;
   reorderLevel: number;
   maximumStock: number;
-  shelfLocation: string;
   leadTime: number;
   productImage: string;
   isActive: boolean;
@@ -140,6 +139,18 @@ export interface Setting {
 }
 
 export const api = {
+  // Launcher
+  getLauncherStatus: () => request<{
+    status: 'NOT_INITIALIZED' | 'READY';
+    recentDatabases: { name: string; path: string; lastOpened: string }[];
+  }>('/api/launcher'),
+  openDatabase: (dbPath: string) => request<{ status: string; dbPath: string }>('/api/launcher/open', {
+    method: 'POST', body: JSON.stringify({ dbPath }),
+  }),
+  createDatabase: (dbPath: string, name?: string) => request<{ status: string; dbPath: string; name: string }>('/api/launcher/new', {
+    method: 'POST', body: JSON.stringify({ dbPath, name }),
+  }),
+
   // Categories
   getCategories: () => request<Category[]>('/api/categories'),
   createCategory: (cat: Category) => request<Category>('/api/categories', { method: 'POST', body: JSON.stringify(cat) }),

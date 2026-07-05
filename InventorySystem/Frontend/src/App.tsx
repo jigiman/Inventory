@@ -19,16 +19,47 @@ import Purchasing from './pages/Purchasing';
 import Inventory from './pages/Inventory';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
+import Launcher from './pages/Launcher';
 import { api } from './api';
+import { getTheme, toggleTheme } from './utils/theme';
+import type { Theme } from './utils/theme';
 
 export default function App() {
   const [activePage, setActivePage] = useState('dashboard');
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState<Theme>(() => getTheme());
   const [storeName, setStoreName] = useState('Inventory Pro');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
+  // Launcher / DB selection state
+  type LauncherStatus = 'checking' | 'NOT_INITIALIZED' | 'READY';
+  const [launcherStatus, setLauncherStatus] = useState<LauncherStatus>('checking');
+  const [recentDatabases, setRecentDatabases] = useState<{ name: string; path: string; lastOpened: string }[]>([]);
+
+  // Check launcher status — retry until backend is up
+  useEffect(() => {
+    let cancelled = false;
+    async function checkLauncher() {
+      while (!cancelled) {
+        try {
+          const res = await api.getLauncherStatus();
+          if (!cancelled) {
+            setRecentDatabases(res.recentDatabases);
+            setLauncherStatus(res.status);
+          }
+          return;
+        } catch {
+          // Backend not up yet — wait and retry
+          await new Promise(r => setTimeout(r, 500));
+        }
+      }
+    }
+    checkLauncher();
+    return () => { cancelled = true; };
+  }, []);
+
   // Load Store Name
   useEffect(() => {
+    if (launcherStatus !== 'READY') return;
     async function loadStoreName() {
       try {
         const settings = await api.getSettings();
@@ -39,16 +70,8 @@ export default function App() {
       }
     }
     loadStoreName();
-  }, [activePage]);
+  }, [activePage, launcherStatus]);
 
-  // Sync dark mode class with HTML tag for Tailwind dark: modifiers
-  useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [darkMode]);
 
   const navigationItems = [
     { id: 'dashboard', text: 'Dashboard', icon: <LayoutDashboard size={18} /> },
@@ -61,6 +84,26 @@ export default function App() {
   ];
 
   return (
+    <>
+      {/* Launcher screen — shown before a database is selected */}
+      {launcherStatus === 'checking' && (
+        <div className="fixed inset-0 flex items-center justify-center bg-gradient-to-br from-slate-950 via-[#0d1220] to-indigo-950">
+          <div className="flex flex-col items-center gap-4">
+            <div className="h-10 w-10 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent" />
+            <p className="text-sm text-slate-400">Starting…</p>
+          </div>
+        </div>
+      )}
+
+      {launcherStatus === 'NOT_INITIALIZED' && (
+        <Launcher
+          recentDatabases={recentDatabases}
+          onReady={() => setLauncherStatus('READY')}
+        />
+      )}
+
+      {/* Main app shell — only rendered once DB is ready */}
+      {launcherStatus === 'READY' && (
     <div className="flex min-h-screen bg-slate-50 text-slate-900 dark:bg-[#070b13] dark:text-slate-100 transition-colors duration-300">
       
       {/* Top Navigation Bar with glassmorphism */}
@@ -134,5 +177,7 @@ export default function App() {
         </div>
       </main>
     </div>
+      )}
+    </>
   );
 }

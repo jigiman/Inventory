@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -31,112 +32,97 @@ public class Program
         var builder = WebApplication.CreateBuilder(args);
         builder.Host.UseSerilog();
 
-        // Setup AppData paths
+        // ── AppData directories ───────────────────────────────────────────────
         var appDataPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), 
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "InventorySystem"
         );
         Directory.CreateDirectory(appDataPath);
-        Directory.CreateDirectory(Path.Combine(appDataPath, "Backups"));
-        Directory.CreateDirectory(Path.Combine(appDataPath, "Images"));
-        Directory.CreateDirectory(Path.Combine(appDataPath, "Exports"));
 
-        var dbPath = Path.Combine(appDataPath, "inventory.db");
+        // ── DatabaseState singleton ───────────────────────────────────────────
+        // Holds the runtime-selected database path. Set by launcher endpoints.
+        builder.Services.AddSingleton<DatabaseState>();
 
-        // Add DbContext
-        builder.Services.AddDbContext<AppDbContext>(options =>
-            options.UseSqlite($"Data Source={dbPath}"));
+        // ── DbContext — configured lazily via DatabaseState ───────────────────
+        // Options are evaluated per-scope so changing DatabaseState.DbPath is
+        // picked up by the next request scope automatically.
+        builder.Services.AddDbContext<AppDbContext>((sp, options) =>
+        {
+            var state = sp.GetRequiredService<DatabaseState>();
+            if (state.IsInitialized)
+                options.UseSqlite(state.ConnectionString);
+        });
 
-        // Register core services
+        // ── Core services ─────────────────────────────────────────────────────
         builder.Services.AddScoped<InventoryService>();
         builder.Services.AddScoped<BackupService>();
         builder.Services.AddScoped<ExportService>();
 
         builder.Services.AddControllers().AddJsonOptions(options =>
         {
-            options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+            options.JsonSerializerOptions.ReferenceHandler =
+                System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
         });
         builder.Services.Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(options =>
         {
-            options.SerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+            options.SerializerOptions.ReferenceHandler =
+                System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
         });
         builder.Services.AddOpenApi();
         builder.Services.AddCors(options =>
         {
             options.AddDefaultPolicy(policy =>
-            {
-                policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
-            });
+                policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
         });
 
-        // Use custom local port
         builder.WebHost.UseUrls($"http://127.0.0.1:{port}");
 
         var app = builder.Build();
 
         app.UseCors();
+
         if (app.Environment.IsDevelopment())
-        {
             app.MapOpenApi();
-        }
+
+        // ── Guard middleware ──────────────────────────────────────────────────
+        // Returns 503 for any non-launcher API call until the DB is initialized.
+        app.Use(async (context, next) =>
+        {
+            var path = context.Request.Path.Value ?? "";
+            bool isLauncherPath = path.StartsWith("/api/launcher", StringComparison.OrdinalIgnoreCase);
+            bool isApiPath = path.StartsWith("/api/", StringComparison.OrdinalIgnoreCase);
+
+            if (isApiPath && !isLauncherPath)
+            {
+                var state = context.RequestServices.GetRequiredService<DatabaseState>();
+                if (!state.IsInitialized)
+                {
+                    context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+                    await context.Response.WriteAsJsonAsync(new
+                    {
+                        error = "NOT_INITIALIZED",
+                        message = "Database has not been selected yet. Use the launcher to open or create a database."
+                    });
+                    return;
+                }
+            }
+
+            await next(context);
+        });
 
         app.UseDefaultFiles();
         app.UseStaticFiles();
-
         app.MapControllers();
         app.MapFallbackToFile("index.html");
 
-        // Register minimal API endpoints
+        // Register all endpoints
+        app.MapLauncherEndpoints();
         app.MapInventoryEndpoints();
-
-        // Automatically run migrations on startup
-        using (var scope = app.Services.CreateScope())
-        {
-            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            await db.Database.MigrateAsync();
-
-            // Seed database
-            var invService = scope.ServiceProvider.GetRequiredService<InventoryService>();
-            await DbSeeder.SeedAsync(db, invService);
-
-            // Run automated daily backup check
-            var backupService = scope.ServiceProvider.GetRequiredService<BackupService>();
-            try
-            {
-                var targetDbPath = backupService.GetDatabaseFilePath();
-                var targetDataPath = Path.GetDirectoryName(targetDbPath) ?? "";
-                var backupsDir = Path.Combine(targetDataPath, "Backups");
-                bool shouldBackup = true;
-
-                if (Directory.Exists(backupsDir))
-                {
-                    var lastBackup = Directory.GetFiles(backupsDir, "*.db")
-                        .Select(f => new FileInfo(f))
-                        .OrderByDescending(fi => fi.CreationTimeUtc)
-                        .FirstOrDefault();
-
-                    if (lastBackup != null && (DateTime.UtcNow - lastBackup.CreationTimeUtc).TotalHours < 24)
-                    {
-                        shouldBackup = false;
-                    }
-                }
-
-                if (shouldBackup)
-                {
-                    Log.Information("No backup found in last 24 hours. Creating automated daily backup...");
-                    var backupPath = await backupService.CreateBackupAsync();
-                    Log.Information("Automated daily backup created successfully: {Path}", backupPath);
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "Failed to run automated daily backup check");
-            }
-        }
 
         await app.StartAsync();
 
         var address = app.Urls.FirstOrDefault() ?? $"http://127.0.0.1:{port}";
+        Log.Information("Backend started at {Address}", address);
         return (app, address);
     }
 }
