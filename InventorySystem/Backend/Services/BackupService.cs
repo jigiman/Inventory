@@ -44,8 +44,9 @@ public class BackupService
             File.Delete(backupPath);
 
         // Perform safe online SQLite backup using VACUUM INTO
+        var escapedPath = backupPath.Replace("'", "''");
 #pragma warning disable EF1002
-        await _context.Database.ExecuteSqlRawAsync($"VACUUM INTO '{backupPath}'");
+        await _context.Database.ExecuteSqlRawAsync($"VACUUM INTO '{escapedPath}'");
 #pragma warning restore EF1002
 
         return backupPath;
@@ -53,6 +54,11 @@ public class BackupService
 
     public async Task RestoreBackupAsync(string backupFileName)
     {
+        if (Path.GetFileName(backupFileName) != backupFileName)
+        {
+            throw new ArgumentException("Invalid backup file name", nameof(backupFileName));
+        }
+
         var dbPath = GetDatabaseFilePath();
         var appDataPath = Path.GetDirectoryName(dbPath) ?? throw new InvalidOperationException("Invalid database folder");
         var backupPath = Path.Combine(appDataPath, "Backups", backupFileName);

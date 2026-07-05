@@ -54,7 +54,8 @@ public static class LauncherEndpoints
             if (string.IsNullOrWhiteSpace(req.DbPath))
                 return Results.BadRequest("dbPath is required.");
 
-            var path = Path.GetFullPath(req.DbPath.Trim());
+            if (!ValidatePath(req.DbPath, out var path, out var error))
+                return Results.BadRequest(error);
 
             if (!File.Exists(path))
                 return Results.BadRequest($"Database file not found: {path}");
@@ -90,7 +91,9 @@ public static class LauncherEndpoints
             if (string.IsNullOrWhiteSpace(req.DbPath))
                 return Results.BadRequest("dbPath is required.");
 
-            var path = Path.GetFullPath(req.DbPath.Trim());
+            if (!ValidatePath(req.DbPath, out var path, out var error))
+                return Results.BadRequest(error);
+
             var name = string.IsNullOrWhiteSpace(req.Name)
                 ? Path.GetFileNameWithoutExtension(path)
                 : req.Name.Trim();
@@ -135,6 +138,69 @@ public static class LauncherEndpoints
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
+
+    private static bool ValidatePath(string rawPath, out string fullPath, out string error)
+    {
+        error = "";
+        fullPath = "";
+
+        try
+        {
+            fullPath = Path.GetFullPath(rawPath.Trim());
+        }
+        catch (Exception ex)
+        {
+            error = $"Invalid path: {ex.Message}";
+            return false;
+        }
+
+        if (!Path.IsPathRooted(fullPath))
+        {
+            error = "Path must be absolute.";
+            return false;
+        }
+
+        // Simple check for sensitive system directories
+        var sensitivePaths = new[]
+        {
+            Path.GetPathRoot(Environment.SystemDirectory), // e.g. C:\
+            Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+            "/etc", "/bin", "/sbin", "/usr", "/var", "/root", "/boot"
+        };
+
+        foreach (var sp in sensitivePaths)
+        {
+            if (string.IsNullOrEmpty(sp)) continue;
+            if (fullPath.StartsWith(sp, StringComparison.OrdinalIgnoreCase))
+            {
+                // Allow user's local app data even if it's under a sensitive root (unlikely but being safe)
+                var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                if (!string.IsNullOrEmpty(localAppData) && fullPath.StartsWith(localAppData, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                // If it's just the root (like C:\), we should be careful.
+                // But usually we want to allow users to save anywhere except system folders.
+                if (string.Equals(fullPath, sp, StringComparison.OrdinalIgnoreCase))
+                {
+                    error = $"Access to system directory '{sp}' is restricted.";
+                    return false;
+                }
+
+                // If it's a subfolder of a system folder
+                if (fullPath.Length > sp.Length && (fullPath[sp.Length] == Path.DirectorySeparatorChar || fullPath[sp.Length] == Path.AltDirectorySeparatorChar))
+                {
+                    error = $"Access to system directory '{sp}' is restricted.";
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
 
     private static async Task MigrateAndOptionallyUnlockAsync(IServiceProvider services, bool seed)
     {
