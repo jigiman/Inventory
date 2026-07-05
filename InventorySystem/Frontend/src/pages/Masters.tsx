@@ -4,6 +4,7 @@ import { api } from '../api';
 import type { Category, Brand, Unit, Supplier } from '../api';
 import { Button } from '../components/ui/Button';
 import { Dialog } from '../components/ui/Dialog';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { Input } from '../components/ui/Input';
 
 export default function Masters() {
@@ -19,6 +20,9 @@ export default function Masters() {
   // Dialog states
   const [openDialog, setOpenDialog] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
+
+  // Confirm delete dialog
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   // Form states
   const [formCategory, setFormCategory] = useState<Category>({ name: '', isArchived: false });
@@ -69,13 +73,19 @@ export default function Masters() {
     setOpenDialog(true);
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this item?')) return;
+  const handleDelete = (id: number) => {
+    setConfirmDeleteId(id);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (confirmDeleteId == null) return;
+    const idToDelete = confirmDeleteId;
+    setConfirmDeleteId(null);
     try {
-      if (activeTab === 0) await api.deleteCategory(id);
-      else if (activeTab === 1) await api.deleteBrand(id);
-      else if (activeTab === 2) await api.deleteUnit(id);
-      else if (activeTab === 3) await api.deleteSupplier(id);
+      if (activeTab === 0) await api.deleteCategory(idToDelete);
+      else if (activeTab === 1) await api.deleteBrand(idToDelete);
+      else if (activeTab === 2) await api.deleteUnit(idToDelete);
+      else if (activeTab === 3) await api.deleteSupplier(idToDelete);
       loadData();
     } catch (err: any) {
       setError(err.message || 'Failed to delete item');
@@ -296,6 +306,16 @@ export default function Masters() {
           </div>
         </form>
       </Dialog>
+
+      <ConfirmDialog
+        open={confirmDeleteId !== null}
+        title="Delete Item"
+        description="Are you sure you want to delete this item? This action cannot be undone."
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setConfirmDeleteId(null)}
+      />
     </div>
   );
 }

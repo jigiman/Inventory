@@ -30,7 +30,8 @@ public class AppDbContext : DbContext
         // Product constraints & indexes
         modelBuilder.Entity<Product>()
             .HasIndex(p => p.SKU)
-            .IsUnique();
+            .IsUnique()
+            .HasFilter("SKU != ''");
 
         modelBuilder.Entity<Product>()
             .HasIndex(p => p.Name);

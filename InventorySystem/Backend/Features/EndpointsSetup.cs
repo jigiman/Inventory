@@ -169,17 +169,18 @@ public static class EndpointsSetup
 
         app.MapPost("/api/products", async (AppDbContext db, InventoryService invService, Product product) =>
         {
-            if (string.IsNullOrWhiteSpace(product.SKU))
-                return Results.BadRequest("SKU is required");
             if (string.IsNullOrWhiteSpace(product.Name))
                 return Results.BadRequest("Name is required");
             if (product.CostPrice < 0 || product.SellingPrice < 0)
                 return Results.BadRequest("Prices cannot be negative");
 
-            // SKU unique check
-            var skuExists = await db.Products.AnyAsync(p => p.SKU == product.SKU);
-            if (skuExists)
-                return Results.BadRequest("SKU must be unique");
+            // SKU unique check (only when provided)
+            if (!string.IsNullOrWhiteSpace(product.SKU))
+            {
+                var skuExists = await db.Products.AnyAsync(p => p.SKU == product.SKU);
+                if (skuExists)
+                    return Results.BadRequest("SKU must be unique");
+            }
 
             db.Products.Add(product);
             await db.SaveChangesAsync();
@@ -204,7 +205,7 @@ public static class EndpointsSetup
             var product = await db.Products.FindAsync(id);
             if (product == null) return Results.NotFound();
 
-            if (product.SKU != input.SKU)
+            if (!string.IsNullOrWhiteSpace(input.SKU) && product.SKU != input.SKU)
             {
                 var skuExists = await db.Products.AnyAsync(p => p.SKU == input.SKU && p.Id != id);
                 if (skuExists) return Results.BadRequest("SKU must be unique");
@@ -221,7 +222,6 @@ public static class EndpointsSetup
             product.SellingPrice = input.SellingPrice;
             product.ReorderLevel = input.ReorderLevel;
             product.MaximumStock = input.MaximumStock;
-            product.ShelfLocation = input.ShelfLocation;
             product.LeadTime = input.LeadTime;
             product.ProductImage = input.ProductImage;
             product.IsActive = input.IsActive;

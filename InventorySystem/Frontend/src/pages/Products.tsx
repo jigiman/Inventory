@@ -4,6 +4,7 @@ import { api } from '../api';
 import type { Product, Category, Brand, Unit, Supplier } from '../api';
 import { Button } from '../components/ui/Button';
 import { Dialog } from '../components/ui/Dialog';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { Switch } from '../components/ui/Switch';
@@ -20,6 +21,9 @@ export default function Products() {
   
   const [openDialog, setOpenDialog] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
+
+  // Confirm delete dialog
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   // Search, Sort, and Pagination states
   const [searchTerm, setSearchTerm] = useState('');
@@ -88,10 +92,15 @@ export default function Products() {
     setOpenDialog(true);
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this product?')) return;
+  const handleDelete = (id: number) => {
+    setConfirmDeleteId(id);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (confirmDeleteId == null) return;
+    setConfirmDeleteId(null);
     try {
-      await api.deleteProduct(id);
+      await api.deleteProduct(confirmDeleteId);
       loadData();
     } catch (err: any) {
       setError(err.message || 'Failed to delete product');
@@ -263,12 +272,7 @@ export default function Products() {
                         {sortField === 'sellingPrice' && (sortAsc ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
                       </div>
                     </th>
-                    <th onClick={() => handleSort('shelfLocation')} className="px-6 py-4 cursor-pointer hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
-                      <div className="flex items-center space-x-1">
-                        <span>Location</span>
-                        {sortField === 'shelfLocation' && (sortAsc ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
-                      </div>
-                    </th>
+
                     <th className="px-6 py-4">Status</th>
                     <th className="px-6 py-4 text-right">Actions</th>
                   </tr>
@@ -283,7 +287,7 @@ export default function Products() {
                       <td className="px-6 py-3.5 text-right font-extrabold text-slate-700 dark:text-slate-350">{p.currentQuantity}</td>
                       <td className="px-6 py-3.5 text-right font-semibold">${p.costPrice.toFixed(2)}</td>
                       <td className="px-6 py-3.5 text-right font-bold text-indigo-600 dark:text-indigo-400">${p.sellingPrice.toFixed(2)}</td>
-                      <td className="px-6 py-3.5 text-slate-450">{p.shelfLocation || '-'}</td>
+
                       <td className="px-6 py-3.5">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-3xs font-extrabold uppercase tracking-wide border ${
                           p.isActive 
@@ -389,7 +393,6 @@ export default function Products() {
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <Input 
               label="SKU" 
-              required 
               value={formProduct.sku} 
               onChange={(e) => setFormProduct({ ...formProduct, sku: e.target.value })} 
             />
@@ -496,11 +499,7 @@ export default function Products() {
               value={formProduct.maximumStock} 
               onChange={(e) => setFormProduct({ ...formProduct, maximumStock: parseFloat(e.target.value) || 0 })} 
             />
-            <Input 
-              label="Shelf Location" 
-              value={formProduct.shelfLocation || ''} 
-              onChange={(e) => setFormProduct({ ...formProduct, shelfLocation: e.target.value })} 
-            />
+
             <Input 
               label="Lead Time (Days)" 
               type="number" 
@@ -538,6 +537,16 @@ export default function Products() {
           </div>
         </form>
       </Dialog>
+
+      <ConfirmDialog
+        open={confirmDeleteId !== null}
+        title="Delete Product"
+        description="Are you sure you want to delete this product? This action cannot be undone."
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setConfirmDeleteId(null)}
+      />
     </div>
   );
 }

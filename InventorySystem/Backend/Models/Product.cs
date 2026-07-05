@@ -7,7 +7,6 @@ public class Product
 {
     public int Id { get; set; }
     
-    [Required]
     public string SKU { get; set; } = string.Empty;
     
     [Required]
@@ -37,7 +36,6 @@ public class Product
     public decimal CurrentQuantity { get; set; }
     public decimal ReorderLevel { get; set; }
     public decimal MaximumStock { get; set; }
-    public string ShelfLocation { get; set; } = string.Empty;
     public int LeadTime { get; set; } // in days
     public string ProductImage { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;

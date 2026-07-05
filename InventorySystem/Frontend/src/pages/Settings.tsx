@@ -3,6 +3,7 @@ import { Save, Database, RefreshCw } from 'lucide-react';
 import { api } from '../api';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 
 export default function Settings() {
   const [storeName, setStoreName] = useState('');
@@ -11,6 +12,9 @@ export default function Settings() {
   const [loadingBackups, setLoadingBackups] = useState(true);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+
+  // Confirm restore dialog
+  const [confirmRestoreFile, setConfirmRestoreFile] = useState<string | null>(null);
 
   async function loadSettings() {
     setLoadingSettings(true);
@@ -66,12 +70,18 @@ export default function Settings() {
     }
   };
 
-  const handleRestoreBackup = async (fileName: string) => {
-    if (!confirm(`WARNING: Restoring will overwrite the current database with backup file: ${fileName}. Are you sure you want to proceed?`)) return;
+  const handleRestoreBackup = (fileName: string) => {
+    setConfirmRestoreFile(fileName);
+  };
+
+  const handleConfirmRestore = async () => {
+    if (!confirmRestoreFile) return;
+    const file = confirmRestoreFile;
+    setConfirmRestoreFile(null);
     setSuccessMsg('');
     setError('');
     try {
-      await api.restoreBackup(fileName);
+      await api.restoreBackup(file);
       setSuccessMsg('Database restored successfully from backup.');
       loadSettings();
     } catch (err: any) {
@@ -80,6 +90,7 @@ export default function Settings() {
   };
 
   return (
+    <>
     <div className="space-y-4 animate-in">
 
       {error && (
@@ -182,5 +193,17 @@ export default function Settings() {
         </div>
       </div>
     </div>
+
+      <ConfirmDialog
+        open={confirmRestoreFile !== null}
+        title="Restore Database"
+        description={confirmRestoreFile ? `This will overwrite the current database with "${confirmRestoreFile}". All unsaved changes will be lost. Are you sure?` : ''}
+        confirmLabel="Restore"
+        cancelLabel="Cancel"
+        variant="warning"
+        onConfirm={handleConfirmRestore}
+        onCancel={() => setConfirmRestoreFile(null)}
+      />
+    </>
   );
 }
