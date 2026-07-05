@@ -14,8 +14,12 @@ public class AppDbContext : DbContext
     public DbSet<Brand> Brands => Set<Brand>();
     public DbSet<Unit> Units => Set<Unit>();
     public DbSet<Supplier> Suppliers => Set<Supplier>();
+    public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<PurchaseOrder> PurchaseOrders => Set<PurchaseOrder>();
     public DbSet<PurchaseItem> PurchaseItems => Set<PurchaseItem>();
+    public DbSet<Sale> Sales => Set<Sale>();
+    public DbSet<SaleItem> SaleItems => Set<SaleItem>();
+    public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<StockTransaction> StockTransactions => Set<StockTransaction>();
     public DbSet<StockAdjustment> StockAdjustments => Set<StockAdjustment>();
     public DbSet<StockCount> StockCounts => Set<StockCount>();
@@ -55,6 +59,23 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<PurchaseOrder>()
             .HasIndex(po => po.SupplierId);
+
+        // Sale indexes
+        modelBuilder.Entity<Sale>()
+            .HasIndex(s => s.SaleDate);
+
+        modelBuilder.Entity<Sale>()
+            .HasIndex(s => s.CustomerId);
+
+        // Payment indexes
+        modelBuilder.Entity<Payment>()
+            .HasIndex(p => p.PaymentDate);
+
+        modelBuilder.Entity<Payment>()
+            .HasIndex(p => p.CustomerId);
+
+        modelBuilder.Entity<Payment>()
+            .HasIndex(p => p.SupplierId);
 
         // StockAdjustment indexes
         modelBuilder.Entity<StockAdjustment>()

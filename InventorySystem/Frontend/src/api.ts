@@ -57,6 +57,16 @@ export interface Supplier {
   notes: string;
 }
 
+export interface Customer {
+  id?: number;
+  name: string;
+  contactPerson: string;
+  phone: string;
+  email: string;
+  address: string;
+  notes: string;
+}
+
 export interface PaginatedResult<T> {
   totalCount: number;
   items: T[];
@@ -105,7 +115,49 @@ export interface PurchaseOrder {
   supplier?: Supplier;
   orderDate?: string;
   status?: string;
+  totalAmount: number;
   items: PurchaseItem[];
+}
+
+export interface SaleItem {
+  id?: number;
+  productId: number;
+  product?: Product;
+  quantity: number;
+  unitPrice: number;
+}
+
+export interface Sale {
+  id?: number;
+  saleNumber?: string;
+  customerId: number;
+  customer?: Customer;
+  saleDate?: string;
+  status?: string;
+  totalAmount: number;
+  items: SaleItem[];
+}
+
+export interface Payment {
+  id?: number;
+  paymentDate?: string;
+  amount: number;
+  paymentMethod: string;
+  reference: string;
+  notes: string;
+  customerId?: number;
+  supplierId?: number;
+  saleId?: number;
+  purchaseOrderId?: number;
+}
+
+export interface FinanceReportItem {
+  customer?: Customer;
+  supplier?: Supplier;
+  totalSales?: number;
+  totalPurchases?: number;
+  totalPaid: number;
+  balance: number;
 }
 
 export interface StockTransaction {
@@ -186,6 +238,12 @@ export const api = {
   updateSupplier: (id: number, supplier: Supplier) => request<Supplier>(`/api/suppliers/${id}`, { method: 'PUT', body: JSON.stringify(supplier) }),
   deleteSupplier: (id: number) => request<void>(`/api/suppliers/${id}`, { method: 'DELETE' }),
 
+  // Customers
+  getCustomers: () => request<Customer[]>('/api/customers'),
+  createCustomer: (customer: Customer) => request<Customer>('/api/customers', { method: 'POST', body: JSON.stringify(customer) }),
+  updateCustomer: (id: number, customer: Customer) => request<Customer>(`/api/customers/${id}`, { method: 'PUT', body: JSON.stringify(customer) }),
+  deleteCustomer: (id: number) => request<void>(`/api/customers/${id}`, { method: 'DELETE' }),
+
   // Products
   getProducts: (page = 1, pageSize = 50, search?: string) => {
     let url = `/api/products?page=${page}&pageSize=${pageSize}`;
@@ -201,6 +259,15 @@ export const api = {
   createPurchaseOrder: (po: PurchaseOrder) => request<PurchaseOrder>('/api/purchase-orders', { method: 'POST', body: JSON.stringify(po) }),
   receivePurchaseOrder: (id: number, items: { productId: number; quantityReceived: number }[]) =>
     request<PurchaseOrder>(`/api/purchase-orders/${id}/receive`, { method: 'POST', body: JSON.stringify(items) }),
+
+  // Sales
+  getSales: () => request<Sale[]>('/api/sales'),
+  createSale: (sale: Sale) => request<Sale>('/api/sales', { method: 'POST', body: JSON.stringify(sale) }),
+
+  // Finance & Payments
+  getDebtors: () => request<FinanceReportItem[]>('/api/finance/debtors'),
+  getCreditors: () => request<FinanceReportItem[]>('/api/finance/creditors'),
+  recordPayment: (payment: Payment) => request<Payment>('/api/payments', { method: 'POST', body: JSON.stringify(payment) }),
 
   // Inventory
   getLedger: (page = 1, pageSize = 50, search?: string) => {
@@ -227,6 +294,8 @@ export const api = {
     totalValue: number;
     lowStockCount: number;
     outOfStockCount: number;
+    totalDebtors: number;
+    totalCreditors: number;
     recentTransactions: {
       id: number;
       transactionDate: string;

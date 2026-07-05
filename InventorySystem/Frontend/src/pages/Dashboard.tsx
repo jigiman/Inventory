@@ -4,7 +4,9 @@ import {
   DollarSign, 
   AlertTriangle, 
   AlertOctagon,
-  Clock
+  Clock,
+  ArrowDownLeft,
+  ArrowUpRight
 } from 'lucide-react';
 import { api } from '../api';
 import * as echarts from 'echarts';
@@ -15,6 +17,8 @@ interface DashboardStats {
   totalValue: number;
   lowStockCount: number;
   outOfStockCount: number;
+  totalDebtors: number;
+  totalCreditors: number;
   recentTransactions: {
     id: number;
     transactionDate: string;
@@ -174,7 +178,7 @@ export default function Dashboard() {
     <div className="space-y-6">
       
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 pb-4">
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 pb-4">
         <div className="flex items-center space-x-4.5 py-3">
           <div className="rounded-2xl bg-indigo-50 p-3.5 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400">
             <Package size={24} />
@@ -214,6 +218,30 @@ export default function Dashboard() {
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-slate-455">Out of Stock</p>
             <h3 className="text-2xl font-extrabold text-rose-600 dark:text-rose-400 mt-1">{stats?.outOfStockCount}</h3>
+          </div>
+        </div>
+
+        <div className="flex items-center space-x-4.5 py-3">
+          <div className="rounded-2xl bg-cyan-50 p-3.5 text-cyan-600 dark:bg-cyan-950/40 dark:text-cyan-400">
+            <ArrowDownLeft size={24} />
+          </div>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-455">Total Debtors</p>
+            <h3 className="text-2xl font-extrabold text-slate-900 dark:text-slate-100 mt-1">
+              ${stats?.totalDebtors.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </h3>
+          </div>
+        </div>
+
+        <div className="flex items-center space-x-4.5 py-3">
+          <div className="rounded-2xl bg-orange-50 p-3.5 text-orange-600 dark:bg-orange-950/40 dark:text-orange-400">
+            <ArrowUpRight size={24} />
+          </div>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-455">Total Creditors</p>
+            <h3 className="text-2xl font-extrabold text-slate-900 dark:text-slate-100 mt-1">
+              ${stats?.totalCreditors.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </h3>
           </div>
         </div>
       </div>

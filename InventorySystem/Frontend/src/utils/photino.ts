@@ -16,14 +16,11 @@ interface PhotinoResponse {
   path?: string | null;
 }
 
-declare global {
-  interface Window {
-    external?: {
-      sendMessage: (msg: string) => void;
-      receiveMessage: (handler: (msg: string) => void) => void;
-    };
-  }
-}
+// Accessing window.external in a way that avoids conflict with built-in External type
+const photinoExternal = (window as any).external as {
+  sendMessage: (msg: string) => void;
+  receiveMessage: (handler: (msg: string) => void) => void;
+} | undefined;
 
 const pending = new Map<string, PendingRequest>();
 
@@ -33,8 +30,8 @@ function genId(): string {
 
 // Install the global router once.
 function ensureRouter() {
-  if (window.external?.receiveMessage) {
-    window.external.receiveMessage((raw: string) => {
+  if (photinoExternal?.receiveMessage) {
+    photinoExternal.receiveMessage((raw: string) => {
       try {
         const msg: PhotinoResponse = JSON.parse(raw);
         const resolve = pending.get(msg.requestId);
@@ -53,7 +50,7 @@ ensureRouter();
 
 /** Returns true when running inside the Photino desktop shell. */
 export function isPhotino(): boolean {
-  return typeof window.external?.sendMessage === 'function';
+  return typeof photinoExternal?.sendMessage === 'function';
 }
 
 /**
@@ -67,7 +64,7 @@ export function pickOpenFile(): Promise<string | null> {
   return new Promise((resolve) => {
     const requestId = genId();
     pending.set(requestId, (msg) => resolve(msg.path ?? null));
-    window.external!.sendMessage(
+    photinoExternal!.sendMessage(
       JSON.stringify({ type: 'pick-file', mode: 'open', requestId })
     );
   });
@@ -84,7 +81,7 @@ export function pickSaveFile(): Promise<string | null> {
   return new Promise((resolve) => {
     const requestId = genId();
     pending.set(requestId, (msg) => resolve(msg.path ?? null));
-    window.external!.sendMessage(
+    photinoExternal!.sendMessage(
       JSON.stringify({ type: 'pick-file', mode: 'save', requestId })
     );
   });

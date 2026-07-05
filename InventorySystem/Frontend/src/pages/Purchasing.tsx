@@ -84,11 +84,14 @@ export default function Purchasing() {
         productId: i.productId,
         quantityOrdered: i.quantityOrdered,
         quantityReceived: 0,
-        costPrice: i.costPrice
+        costPrice: i.costPrice,
+        unitPrice: i.costPrice // Using costPrice as unitPrice for simplicity in the PO
       }));
+      const totalAmount = items.reduce((sum, item) => sum + (item.quantityOrdered * item.costPrice), 0);
       await api.createPurchaseOrder({
         supplierId: selectedSupplierId,
-        items
+        items,
+        totalAmount
       });
       setOpenCreate(false);
       loadData();

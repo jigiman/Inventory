@@ -1,6 +1,6 @@
 import React from "react"
 import { createPortal } from "react-dom"
-import { AlertTriangle, Trash2, RotateCcw } from "lucide-react"
+import { AlertTriangle, Trash2 } from "lucide-react"
 import { Button } from "./Button"
 import { cn } from "../../utils"
 

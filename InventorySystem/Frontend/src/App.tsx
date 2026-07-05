@@ -9,13 +9,17 @@ import {
    Settings as SettingsIcon, 
    Sun, 
    Moon,
-   Menu
+   Menu,
+   ShoppingCart,
+   Wallet
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard';
 import Products from './pages/Products';
 import Masters from './pages/Masters';
 import Purchasing from './pages/Purchasing';
+import Sales from './pages/Sales';
+import Finance from './pages/Finance';
 import Inventory from './pages/Inventory';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
@@ -95,6 +99,8 @@ export default function App() {
     { id: 'products', text: 'Products', icon: <Package size={18} /> },
     { id: 'masters', text: 'Masters', icon: <Building2 size={18} /> },
     { id: 'purchasing', text: 'Purchasing', icon: <FileText size={18} /> },
+    { id: 'sales', text: 'Sales', icon: <ShoppingCart size={18} /> },
+    { id: 'finance', text: 'Finance', icon: <Wallet size={18} /> },
     { id: 'inventory', text: 'Stock Ledger', icon: <Database size={18} /> },
     { id: 'reports', text: 'Reports', icon: <TrendingUp size={18} /> },
     { id: 'settings', text: 'Settings', icon: <SettingsIcon size={18} /> },
@@ -190,6 +196,8 @@ export default function App() {
           {activePage === 'products' && <Products />}
           {activePage === 'masters' && <Masters />}
           {activePage === 'purchasing' && <Purchasing />}
+          {activePage === 'sales' && <Sales />}
+          {activePage === 'finance' && <Finance />}
           {activePage === 'inventory' && <Inventory />}
           {activePage === 'reports' && <Reports />}
           {activePage === 'settings' && <Settings />}

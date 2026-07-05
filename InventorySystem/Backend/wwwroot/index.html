@@ -4,9 +4,18 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend</title>
-    <script type="module" crossorigin src="/assets/index-iU1pREW_.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-cCWdhTTa.css">
+    <title>Inventory Pro</title>
+    <!-- Apply saved theme before React loads to avoid flash of wrong theme -->
+    <script>
+      try {
+        var t = localStorage.getItem('theme');
+        if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+          document.documentElement.classList.add('dark');
+        }
+      } catch (_) {}
+    </script>
+    <script type="module" crossorigin src="/assets/index-B9P6Q9BQ.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-BMDAY7AX.css">
   </head>
   <body>
     <div id="root"></div>
