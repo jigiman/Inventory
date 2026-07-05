@@ -39,7 +39,7 @@ export default function Products() {
     costPrice: 0, sellingPrice: 0,
     openingQuantity: 0, currentQuantity: 0,
     reorderLevel: 0, maximumStock: 0,
-    shelfLocation: '', leadTime: 0, productImage: '',
+    leadTime: 0, productImage: '',
     isActive: true, notes: ''
   });
 
@@ -82,7 +82,7 @@ export default function Products() {
       costPrice: 0, sellingPrice: 0,
       openingQuantity: 0, currentQuantity: 0,
       reorderLevel: 0, maximumStock: 0,
-      shelfLocation: '', leadTime: 0, productImage: '',
+      leadTime: 0, productImage: '',
       isActive: true, notes: ''
     });
     setOpenDialog(true);
@@ -305,7 +305,7 @@ export default function Products() {
                       </td>
                     </tr>
                   ))}
-                  {filteredSortedProducts.length === 0 && (
+                  {paginatedProducts.length === 0 && (
                     <tr>
                       <td colSpan={10} className="py-12 text-center text-slate-400 font-medium">
                         No products found matching your search.

@@ -39,7 +39,7 @@ export default function Purchasing() {
       ]);
       setOrders(pos);
       setSuppliers(sups);
-      setProducts(prods);
+      setProducts(prods.items);
       if (sups.length > 0) setSelectedSupplierId(sups[0].id!);
     } catch (err: any) {
       setError(err.message || 'Failed to load purchasing data');
