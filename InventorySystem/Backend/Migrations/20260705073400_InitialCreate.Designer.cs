@@ -11,8 +11,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Backend.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260705052459_RemoveShelfLocation_OptionalSKU")]
-    partial class RemoveShelfLocation_OptionalSKU
+    [Migration("20260705073400_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -251,6 +251,8 @@ namespace Backend.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("OrderDate");
+
                     b.HasIndex("SupplierId");
 
                     b.ToTable("PurchaseOrders");
@@ -302,6 +304,8 @@ namespace Backend.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CreatedDate");
 
                     b.HasIndex("ProductId");
 

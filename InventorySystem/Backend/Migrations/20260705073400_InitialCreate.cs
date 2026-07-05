@@ -144,7 +144,6 @@ namespace Backend.Migrations
                     CurrentQuantity = table.Column<decimal>(type: "TEXT", nullable: false),
                     ReorderLevel = table.Column<decimal>(type: "TEXT", nullable: false),
                     MaximumStock = table.Column<decimal>(type: "TEXT", nullable: false),
-                    ShelfLocation = table.Column<string>(type: "TEXT", nullable: false),
                     LeadTime = table.Column<int>(type: "INTEGER", nullable: false),
                     ProductImage = table.Column<string>(type: "TEXT", nullable: false),
                     IsActive = table.Column<bool>(type: "INTEGER", nullable: false),
@@ -326,7 +325,8 @@ namespace Backend.Migrations
                 name: "IX_Products_SKU",
                 table: "Products",
                 column: "SKU",
-                unique: true);
+                unique: true,
+                filter: "SKU != ''");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Products_SupplierId",
@@ -349,6 +349,11 @@ namespace Backend.Migrations
                 column: "PurchaseOrderId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_PurchaseOrders_OrderDate",
+                table: "PurchaseOrders",
+                column: "OrderDate");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_PurchaseOrders_SupplierId",
                 table: "PurchaseOrders",
                 column: "SupplierId");
@@ -358,6 +363,11 @@ namespace Backend.Migrations
                 table: "Settings",
                 column: "Key",
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_StockAdjustments_CreatedDate",
+                table: "StockAdjustments",
+                column: "CreatedDate");
 
             migrationBuilder.CreateIndex(
                 name: "IX_StockAdjustments_ProductId",

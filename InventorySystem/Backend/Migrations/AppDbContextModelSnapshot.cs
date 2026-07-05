@@ -248,6 +248,8 @@ namespace Backend.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("OrderDate");
+
                     b.HasIndex("SupplierId");
 
                     b.ToTable("PurchaseOrders");
@@ -299,6 +301,8 @@ namespace Backend.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CreatedDate");
 
                     b.HasIndex("ProductId");
 
