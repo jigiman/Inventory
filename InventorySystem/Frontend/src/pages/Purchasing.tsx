@@ -6,7 +6,6 @@ import { Button } from '../components/ui/Button';
 import { Dialog } from '../components/ui/Dialog';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
-import { Card } from '../components/ui/Card';
 
 export default function Purchasing() {
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
@@ -124,12 +123,8 @@ export default function Purchasing() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">Purchasing</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Create and receive Purchase Orders (PO).</p>
-        </div>
+    <div className="space-y-4">
+      <div className="flex justify-end items-center">
         <Button onClick={() => setOpenCreate(true)} disabled={suppliers.length === 0 || products.length === 0} className="inline-flex items-center space-x-2">
           <Plus size={16} />
           <span>New Purchase Order</span>
@@ -147,7 +142,7 @@ export default function Purchasing() {
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-650 border-t-transparent dark:border-indigo-400" />
         </div>
       ) : (
-        <Card className="p-0 overflow-hidden border border-slate-200/60 dark:border-slate-800/80 shadow-sm">
+        <div className="overflow-x-auto border-t border-slate-200/50 dark:border-slate-800/60">
           <table className="w-full text-left text-sm text-slate-500 dark:text-slate-400">
             <thead className="bg-slate-550/5 text-2xs font-extrabold uppercase tracking-wider text-slate-400 dark:bg-slate-900/40 border-b border-slate-200/50 dark:border-slate-800/60">
               <tr>
@@ -199,7 +194,7 @@ export default function Purchasing() {
               )}
             </tbody>
           </table>
-        </Card>
+        </div>
       )}
 
       {/* Create PO Dialog */}

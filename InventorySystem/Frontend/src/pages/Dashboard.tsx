@@ -4,12 +4,10 @@ import {
   DollarSign, 
   AlertTriangle, 
   AlertOctagon,
-  ArrowUpRight,
   Clock
 } from 'lucide-react';
 import { api } from '../api';
 import * as echarts from 'echarts';
-import { Card } from '../components/ui/Card';
 
 interface DashboardStats {
   totalProducts: number;
@@ -173,33 +171,22 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">
-          Dashboard
-        </h1>
-        <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
-          Real-time snapshot of your single-store inventory state.
-        </p>
-      </div>
+    <div className="space-y-6">
       
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="flex items-center space-x-4.5 p-5 relative overflow-hidden group hover:scale-[1.02]">
-          <div className="rounded-2xl bg-indigo-50 p-3.5 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400 transition-transform duration-300 group-hover:scale-110">
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 pb-4">
+        <div className="flex items-center space-x-4.5 py-3">
+          <div className="rounded-2xl bg-indigo-50 p-3.5 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400">
             <Package size={24} />
           </div>
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Products</p>
             <h3 className="text-2xl font-extrabold text-slate-900 dark:text-slate-100 mt-1">{stats?.totalProducts}</h3>
           </div>
-          <div className="absolute right-4 top-4 text-slate-200 dark:text-slate-800 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-            <ArrowUpRight size={20} />
-          </div>
-        </Card>
+        </div>
 
-        <Card className="flex items-center space-x-4.5 p-5 relative overflow-hidden group hover:scale-[1.02]">
-          <div className="rounded-2xl bg-emerald-50 p-3.5 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400 transition-transform duration-300 group-hover:scale-110">
+        <div className="flex items-center space-x-4.5 py-3">
+          <div className="rounded-2xl bg-emerald-50 p-3.5 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">
             <DollarSign size={24} />
           </div>
           <div>
@@ -208,39 +195,36 @@ export default function Dashboard() {
               ${stats?.totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </h3>
           </div>
-          <div className="absolute right-4 top-4 text-slate-200 dark:text-slate-800 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-            <ArrowUpRight size={20} />
-          </div>
-        </Card>
+        </div>
 
-        <Card className="flex items-center space-x-4.5 p-5 relative overflow-hidden group hover:scale-[1.02] border-amber-200/30 dark:border-amber-900/20">
-          <div className="rounded-2xl bg-amber-50 p-3.5 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400 transition-transform duration-300 group-hover:scale-110">
+        <div className="flex items-center space-x-4.5 py-3">
+          <div className="rounded-2xl bg-amber-50 p-3.5 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
             <AlertTriangle size={24} />
           </div>
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-slate-405">Low Stock Items</p>
             <h3 className="text-2xl font-extrabold text-amber-600 dark:text-amber-400 mt-1">{stats?.lowStockCount}</h3>
           </div>
-        </Card>
+        </div>
 
-        <Card className="flex items-center space-x-4.5 p-5 relative overflow-hidden group hover:scale-[1.02] border-rose-200/30 dark:border-rose-900/20">
-          <div className="rounded-2xl bg-rose-50 p-3.5 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400 transition-transform duration-300 group-hover:scale-110">
+        <div className="flex items-center space-x-4.5 py-3">
+          <div className="rounded-2xl bg-rose-50 p-3.5 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400">
             <AlertOctagon size={24} />
           </div>
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-slate-455">Out of Stock</p>
             <h3 className="text-2xl font-extrabold text-rose-600 dark:text-rose-400 mt-1">{stats?.outOfStockCount}</h3>
           </div>
-        </Card>
+        </div>
       </div>
 
       {/* Grid for Chart & Table */}
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-        <Card className="flex h-[420px] flex-col p-6 hover:shadow-lg">
+      <div className="grid grid-cols-1 gap-12 lg:grid-cols-2 pt-4">
+        <div className="flex h-[420px] flex-col">
           <div ref={chartRef} className="h-full w-full" />
-        </Card>
+        </div>
 
-        <Card className="flex h-[420px] flex-col p-6 hover:shadow-lg">
+        <div className="flex h-[420px] flex-col">
           <div className="flex items-center justify-between mb-5">
             <h3 className="text-lg font-extrabold tracking-tight text-slate-900 dark:text-slate-100">
               Recent Activity
@@ -252,7 +236,7 @@ export default function Dashboard() {
           </div>
           <div className="flex-1 overflow-y-auto pr-1">
             <table className="w-full text-left text-sm text-slate-500 dark:text-slate-400">
-              <thead className="sticky top-0 bg-white text-xs font-bold uppercase tracking-wider text-slate-400 dark:bg-slate-900 pb-3 border-b border-slate-100 dark:border-slate-800">
+              <thead className="sticky top-0 bg-slate-50 text-xs font-bold uppercase tracking-wider text-slate-400 dark:bg-[#070b13] pb-3 border-b border-slate-100 dark:border-slate-800">
                 <tr>
                   <th className="py-3">Product</th>
                   <th className="py-3">Type</th>
@@ -293,7 +277,7 @@ export default function Dashboard() {
               </tbody>
             </table>
           </div>
-        </Card>
+        </div>
       </div>
     </div>
   );

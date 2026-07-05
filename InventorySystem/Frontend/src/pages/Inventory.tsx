@@ -6,7 +6,6 @@ import { Button } from '../components/ui/Button';
 import { Dialog } from '../components/ui/Dialog';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
-import { Card } from '../components/ui/Card';
 
 export default function Inventory() {
   const [ledger, setLedger] = useState<StockTransaction[]>([]);
@@ -184,13 +183,8 @@ export default function Inventory() {
   const difference = countForm.physicalQuantity - countForm.systemQuantity;
 
   return (
-    <div className="flex flex-col h-full space-y-6">
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">Stock Ledger</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">View audit logs and make stock adjustments.</p>
-        </div>
-        
+    <div className="flex flex-col h-full space-y-4">
+      <div className="flex justify-end items-center gap-4">
         <div className="flex flex-wrap gap-3">
           <div className="relative w-60">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -225,8 +219,7 @@ export default function Inventory() {
         </div>
       ) : (
         <div className="space-y-4">
-          <Card className="p-0 overflow-hidden border border-slate-200/60 dark:border-slate-800/80 shadow-sm">
-            <div className="overflow-x-auto">
+          <div className="overflow-x-auto border-t border-slate-200/50 dark:border-slate-800/60">
               <table className="w-full text-left text-sm text-slate-500 dark:text-slate-400">
                 <thead className="bg-slate-550/5 text-2xs font-extrabold uppercase tracking-wider text-slate-400 dark:bg-slate-900/40 border-b border-slate-200/50 dark:border-slate-800/60 select-none">
                   <tr>
@@ -314,7 +307,6 @@ export default function Inventory() {
                 </tbody>
               </table>
             </div>
-          </Card>
 
           {/* Pagination Controls */}
           {totalPages > 1 && (

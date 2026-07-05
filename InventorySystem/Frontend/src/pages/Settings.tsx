@@ -3,7 +3,6 @@ import { Save, Database, RefreshCw } from 'lucide-react';
 import { api } from '../api';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
-import { Card } from '../components/ui/Card';
 
 export default function Settings() {
   const [storeName, setStoreName] = useState('');
@@ -81,11 +80,7 @@ export default function Settings() {
   };
 
   return (
-    <div className="space-y-6 animate-in">
-      <div>
-        <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">Settings</h1>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Configure application properties and manage database backups.</p>
-      </div>
+    <div className="space-y-4 animate-in">
 
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-650 dark:border-red-900/50 dark:bg-red-950/20 dark:text-red-400">
@@ -100,7 +95,7 @@ export default function Settings() {
 
       <div className="grid grid-cols-1 gap-8">
         {/* Store configuration card */}
-        <Card className="space-y-6">
+        <div className="space-y-6 border border-slate-200/50 dark:border-slate-800/60 bg-white/40 dark:bg-slate-950/20 p-6 rounded-2xl">
           <div>
             <h3 className="text-lg font-extrabold text-slate-900 dark:text-slate-100">Store Profile</h3>
             <p className="text-xs text-slate-400 dark:text-slate-505 mt-0.5">Customize global metadata displayed throughout the application.</p>
@@ -126,10 +121,10 @@ export default function Settings() {
               </form>
             )}
           </div>
-        </Card>
+        </div>
 
         {/* Database card */}
-        <Card className="space-y-6">
+        <div className="space-y-6 border border-slate-200/50 dark:border-slate-800/60 bg-white/40 dark:bg-slate-950/20 p-6 rounded-2xl">
           <div className="flex justify-between items-center">
             <div>
               <h3 className="text-lg font-extrabold text-slate-900 dark:text-slate-100">Database Checkpoints</h3>
@@ -147,7 +142,7 @@ export default function Settings() {
                 <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-650 border-t-transparent dark:border-indigo-400" />
               </div>
             ) : (
-              <div className="border border-slate-200/60 dark:border-slate-800/80 rounded-2xl overflow-hidden shadow-2xs">
+              <div className="overflow-x-auto border-t border-slate-200/50 dark:border-slate-800/60">
                 <table className="w-full text-left text-sm text-slate-500 dark:text-slate-400">
                   <thead className="bg-slate-550/5 text-2xs font-extrabold uppercase tracking-wider text-slate-400 dark:bg-slate-900/40 border-b border-slate-200/50 dark:border-slate-800/60">
                     <tr>
@@ -184,7 +179,7 @@ export default function Settings() {
               </div>
             )}
           </div>
-        </Card>
+        </div>
       </div>
     </div>
   );
