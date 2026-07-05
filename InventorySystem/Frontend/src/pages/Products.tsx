@@ -1,16 +1,15 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Box, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Grid, FormControl, InputLabel, Select, MenuItem, Switch, FormControlLabel, Typography, CircularProgress, Alert } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
-import { AgGridReact } from 'ag-grid-react';
-import type { ColDef } from 'ag-grid-community';
-import 'ag-grid-community/styles/ag-grid.css';
-import 'ag-grid-community/styles/ag-theme-quartz.css';
-
+import React, { useState, useEffect, useMemo } from 'react';
+import { Edit2, Trash2, Plus, Search, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from 'lucide-react';
 import { api } from '../api';
 import type { Product, Category, Brand, Unit, Supplier } from '../api';
+import { Button } from '../components/ui/Button';
+import { Dialog } from '../components/ui/Dialog';
+import { Input } from '../components/ui/Input';
+import { Select } from '../components/ui/Select';
+import { Switch } from '../components/ui/Switch';
+import { Card } from '../components/ui/Card';
 
 export default function Products() {
-  const theme = useTheme();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -23,6 +22,13 @@ export default function Products() {
   const [openDialog, setOpenDialog] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
 
+  // Search, Sort, and Pagination states
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortField, setSortField] = useState<string>('name');
+  const [sortAsc, setSortAsc] = useState<boolean>(true);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const itemsPerPage = 12;
+
   const [formProduct, setFormProduct] = useState<Product>({
     sku: '', name: '', description: '',
     categoryId: 0, brandId: 0, unitId: 0, supplierId: 0,
@@ -32,8 +38,6 @@ export default function Products() {
     shelfLocation: '', leadTime: 0, productImage: '',
     isActive: true, notes: ''
   });
-
-  const gridRef = useRef<AgGridReact>(null);
 
   async function loadData() {
     setLoading(true);
@@ -110,151 +114,438 @@ export default function Products() {
     }
   };
 
-  // AG Grid Column Definitions
-  const columnDefs = useMemo<ColDef[]>(() => [
-    { field: 'sku', headerName: 'SKU', width: 120, filter: true },
-    { field: 'name', headerName: 'Name', width: 180, filter: true },
-    { field: 'category.name', headerName: 'Category', width: 130 },
-    { field: 'brand.name', headerName: 'Brand', width: 110 },
-    { field: 'currentQuantity', headerName: 'Qty in Stock', width: 110, type: 'numericColumn' },
-    { field: 'costPrice', headerName: 'Cost', width: 100, valueFormatter: (p) => `$${p.value?.toFixed(2)}`, type: 'numericColumn' },
-    { field: 'sellingPrice', headerName: 'Price', width: 100, valueFormatter: (p) => `$${p.value?.toFixed(2)}`, type: 'numericColumn' },
-    { field: 'shelfLocation', headerName: 'Location', width: 120 },
-    {
-      field: 'isActive',
-      headerName: 'Status',
-      width: 100,
-      valueFormatter: (p) => p.value ? 'Active' : 'Inactive',
-    },
-    {
-      headerName: 'Actions',
-      width: 160,
-      cellRenderer: (params: any) => (
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', height: '100%' }}>
-          <Button variant="outlined" size="small" onClick={() => handleOpenEdit(params.data)}>Edit</Button>
-          <Button variant="outlined" size="small" color="error" onClick={() => handleDelete(params.data.id)}>Delete</Button>
-        </div>
-      )
+  // Sort helper
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortAsc(!sortAsc);
+    } else {
+      setSortField(field);
+      setSortAsc(true);
     }
-  ], [categories, brands, suppliers]);
+    setCurrentPage(1);
+  };
 
-  const defaultColDef = useMemo<ColDef>(() => ({
-    sortable: true,
-    resizable: true,
-  }), []);
+  // Compute filtered & sorted list
+  const filteredSortedProducts = useMemo(() => {
+    let result = [...products];
+
+    // 1. Filter
+    if (searchTerm) {
+      const lower = searchTerm.toLowerCase();
+      result = result.filter(
+        (p) =>
+          p.name.toLowerCase().includes(lower) ||
+          p.sku.toLowerCase().includes(lower) ||
+          (p.category?.name && p.category.name.toLowerCase().includes(lower)) ||
+          (p.brand?.name && p.brand.name.toLowerCase().includes(lower)) ||
+          (p.shelfLocation && p.shelfLocation.toLowerCase().includes(lower))
+      );
+    }
+
+    // 2. Sort
+    result.sort((a: any, b: any) => {
+      let valA: any = a[sortField];
+      let valB: any = b[sortField];
+
+      // Nested object fields logic
+      if (sortField.includes('.')) {
+        const parts = sortField.split('.');
+        valA = a[parts[0]]?.[parts[1]];
+        valB = b[parts[0]]?.[parts[1]];
+      }
+
+      if (valA === undefined || valA === null) return 1;
+      if (valB === undefined || valB === null) return -1;
+
+      if (typeof valA === 'string') {
+        return sortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+      } else {
+        return sortAsc ? valA - valB : valB - valA;
+      }
+    });
+
+    return result;
+  }, [products, searchTerm, sortField, sortAsc]);
+
+  // Pagination computations
+  const totalItems = filteredSortedProducts.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
+  const paginatedProducts = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredSortedProducts.slice(start, start + itemsPerPage);
+  }, [filteredSortedProducts, currentPage]);
+
+  const startRange = totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
+  const endRange = Math.min(currentPage * itemsPerPage, totalItems);
+
+  // Change page handler
+  const handlePageChange = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
 
   return (
-    <Box sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" sx={{ fontWeight: 600 }}>Products</Typography>
-        <Button variant="contained" onClick={handleOpenAdd}>
-          Add Product
-        </Button>
-      </Box>
+    <div className="flex flex-col h-full space-y-6">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">Products</h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Manage store items, pricing, and details.</p>
+        </div>
+        
+        <div className="flex gap-3">
+          <div className="relative w-64">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search products..."
+              value={searchTerm}
+              onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm placeholder-slate-400/80 focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 transition-all duration-200"
+            />
+          </div>
+          <Button onClick={handleOpenAdd} className="inline-flex items-center space-x-2">
+            <Plus size={16} />
+            <span>Add Product</span>
+          </Button>
+        </div>
+      </div>
 
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-650 dark:border-red-900/50 dark:bg-red-950/20 dark:text-red-400">
+          {error}
+        </div>
+      )}
 
       {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress /></Box>
+        <div className="flex h-[400px] items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-650 border-t-transparent dark:border-indigo-400" />
+        </div>
       ) : (
-        <div className={theme.palette.mode === 'dark' ? 'ag-theme-quartz-dark' : 'ag-theme-quartz'} style={{ flexGrow: 1, height: '600px', width: '100%', boxShadow: 'var(--shadow-md)' }}>
-          <AgGridReact
-            ref={gridRef}
-            rowData={products}
-            columnDefs={columnDefs}
-            defaultColDef={defaultColDef}
-            pagination={true}
-            paginationPageSize={15}
-          />
+        <div className="space-y-4">
+          <Card className="p-0 overflow-hidden border border-slate-200/60 dark:border-slate-800/80 shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm text-slate-500 dark:text-slate-400">
+                <thead className="bg-slate-550/5 text-2xs font-extrabold uppercase tracking-wider text-slate-400 dark:bg-slate-900/40 border-b border-slate-200/50 dark:border-slate-800/60 select-none">
+                  <tr>
+                    <th onClick={() => handleSort('sku')} className="px-6 py-4 cursor-pointer hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
+                      <div className="flex items-center space-x-1">
+                        <span>SKU</span>
+                        {sortField === 'sku' && (sortAsc ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                      </div>
+                    </th>
+                    <th onClick={() => handleSort('name')} className="px-6 py-4 cursor-pointer hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
+                      <div className="flex items-center space-x-1">
+                        <span>Name</span>
+                        {sortField === 'name' && (sortAsc ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                      </div>
+                    </th>
+                    <th onClick={() => handleSort('category.name')} className="px-6 py-4 cursor-pointer hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
+                      <div className="flex items-center space-x-1">
+                        <span>Category</span>
+                        {sortField === 'category.name' && (sortAsc ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                      </div>
+                    </th>
+                    <th onClick={() => handleSort('brand.name')} className="px-6 py-4 cursor-pointer hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
+                      <div className="flex items-center space-x-1">
+                        <span>Brand</span>
+                        {sortField === 'brand.name' && (sortAsc ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                      </div>
+                    </th>
+                    <th onClick={() => handleSort('currentQuantity')} className="px-6 py-4 cursor-pointer hover:text-slate-700 dark:hover:text-slate-200 transition-colors text-right">
+                      <div className="flex items-center justify-end space-x-1">
+                        <span>Qty</span>
+                        {sortField === 'currentQuantity' && (sortAsc ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                      </div>
+                    </th>
+                    <th onClick={() => handleSort('costPrice')} className="px-6 py-4 cursor-pointer hover:text-slate-700 dark:hover:text-slate-200 transition-colors text-right">
+                      <div className="flex items-center justify-end space-x-1">
+                        <span>Cost</span>
+                        {sortField === 'costPrice' && (sortAsc ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                      </div>
+                    </th>
+                    <th onClick={() => handleSort('sellingPrice')} className="px-6 py-4 cursor-pointer hover:text-slate-700 dark:hover:text-slate-200 transition-colors text-right">
+                      <div className="flex items-center justify-end space-x-1">
+                        <span>Price</span>
+                        {sortField === 'sellingPrice' && (sortAsc ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                      </div>
+                    </th>
+                    <th onClick={() => handleSort('shelfLocation')} className="px-6 py-4 cursor-pointer hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
+                      <div className="flex items-center space-x-1">
+                        <span>Location</span>
+                        {sortField === 'shelfLocation' && (sortAsc ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                      </div>
+                    </th>
+                    <th className="px-6 py-4">Status</th>
+                    <th className="px-6 py-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
+                  {paginatedProducts.map((p) => (
+                    <tr key={p.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/10 transition-colors">
+                      <td className="px-6 py-3.5 font-mono text-xs">{p.sku}</td>
+                      <td className="px-6 py-3.5 font-bold text-slate-900 dark:text-slate-200">{p.name}</td>
+                      <td className="px-6 py-3.5 font-medium">{p.category?.name}</td>
+                      <td className="px-6 py-3.5 text-slate-450">{p.brand?.name}</td>
+                      <td className="px-6 py-3.5 text-right font-extrabold text-slate-700 dark:text-slate-350">{p.currentQuantity}</td>
+                      <td className="px-6 py-3.5 text-right font-semibold">${p.costPrice.toFixed(2)}</td>
+                      <td className="px-6 py-3.5 text-right font-bold text-indigo-600 dark:text-indigo-400">${p.sellingPrice.toFixed(2)}</td>
+                      <td className="px-6 py-3.5 text-slate-450">{p.shelfLocation || '-'}</td>
+                      <td className="px-6 py-3.5">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-3xs font-extrabold uppercase tracking-wide border ${
+                          p.isActive 
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200/30 dark:bg-emerald-950/20 dark:text-emerald-400' 
+                            : 'bg-slate-100 text-slate-500 border-slate-200/50 dark:bg-slate-900 dark:text-slate-550'
+                        }`}>
+                          {p.isActive ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-3.5 text-right">
+                        <div className="flex gap-2 justify-end items-center">
+                          <button 
+                            type="button"
+                            className="flex items-center justify-center p-1.5 rounded-lg border border-slate-200/60 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-650 dark:text-slate-350 cursor-pointer transition-colors"
+                            onClick={() => handleOpenEdit(p)}
+                            title="Edit Product"
+                          >
+                            <Edit2 size={13} />
+                          </button>
+                          <button 
+                            type="button"
+                            className="flex items-center justify-center p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-650 dark:bg-rose-950/30 dark:text-rose-400 cursor-pointer transition-colors"
+                            onClick={() => handleDelete(p.id!)}
+                            title="Delete Product"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredSortedProducts.length === 0 && (
+                    <tr>
+                      <td colSpan={10} className="py-12 text-center text-slate-400 font-medium">
+                        No products found matching your search.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-4 px-2 py-1">
+              <p className="text-xs font-semibold text-slate-400">
+                Showing <span className="text-slate-650 dark:text-slate-300">{startRange}</span> to <span className="text-slate-650 dark:text-slate-300">{endRange}</span> of <span className="text-slate-650 dark:text-slate-300">{totalItems}</span> products
+              </p>
+              
+              <div className="flex items-center space-x-1.5">
+                <button
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-900 disabled:opacity-40 disabled:hover:bg-transparent cursor-pointer transition-colors"
+                >
+                  <ChevronLeft size={14} />
+                </button>
+                
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                  // Only show current page, first, last, and neighbors
+                  if (page === 1 || page === totalPages || Math.abs(page - currentPage) <= 1) {
+                    return (
+                      <button
+                        key={page}
+                        onClick={() => handlePageChange(page)}
+                        className={`px-3 py-1.5 text-xs font-bold rounded-lg cursor-pointer transition-all ${
+                          currentPage === page
+                            ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-sm'
+                            : 'border border-slate-200 dark:border-slate-800 text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-900'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    );
+                  }
+                  if (page === 2 || page === totalPages - 1) {
+                    return <span key={page} className="text-slate-400 px-1 text-xs">...</span>;
+                  }
+                  return null;
+                })}
+
+                <button
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-900 disabled:opacity-40 disabled:hover:bg-transparent cursor-pointer transition-colors"
+                >
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* Add / Edit Dialog */}
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
-        <form onSubmit={handleSave}>
-          <DialogTitle>{editId ? 'Edit Product' : 'Add New Product'}</DialogTitle>
-          <DialogContent dividers>
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={6}>
-                <TextField label="SKU" fullWidth required value={formProduct.sku} onChange={(e) => setFormProduct({ ...formProduct, sku: e.target.value })} />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField label="Product Name" fullWidth required value={formProduct.name} onChange={(e) => setFormProduct({ ...formProduct, name: e.target.value })} />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField label="Description" fullWidth multiline rows={2} value={formProduct.description} onChange={(e) => setFormProduct({ ...formProduct, description: e.target.value })} />
-              </Grid>
+      <Dialog 
+        open={openDialog} 
+        onClose={() => setOpenDialog(false)} 
+        title={editId ? 'Edit Product' : 'Add New Product'}
+        size="lg"
+      >
+        <form onSubmit={handleSave} className="space-y-6">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <Input 
+              label="SKU" 
+              required 
+              value={formProduct.sku} 
+              onChange={(e) => setFormProduct({ ...formProduct, sku: e.target.value })} 
+            />
+            <Input 
+              label="Product Name" 
+              required 
+              value={formProduct.name} 
+              onChange={(e) => setFormProduct({ ...formProduct, name: e.target.value })} 
+            />
+          </div>
 
-              <Grid item xs={12} sm={6} md={3}>
-                <FormControl fullWidth required>
-                  <InputLabel>Category</InputLabel>
-                  <Select value={formProduct.categoryId} label="Category" onChange={(e) => setFormProduct({ ...formProduct, categoryId: Number(e.target.value) })}>
-                    {categories.map((c) => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <FormControl fullWidth required>
-                  <InputLabel>Brand</InputLabel>
-                  <Select value={formProduct.brandId} label="Brand" onChange={(e) => setFormProduct({ ...formProduct, brandId: Number(e.target.value) })}>
-                    {brands.map((b) => <MenuItem key={b.id} value={b.id}>{b.name}</MenuItem>)}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <FormControl fullWidth required>
-                  <InputLabel>Unit</InputLabel>
-                  <Select value={formProduct.unitId} label="Unit" onChange={(e) => setFormProduct({ ...formProduct, unitId: Number(e.target.value) })}>
-                    {units.map((u) => <MenuItem key={u.id} value={u.id}>{u.name}</MenuItem>)}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <FormControl fullWidth required>
-                  <InputLabel>Supplier</InputLabel>
-                  <Select value={formProduct.supplierId} label="Supplier" onChange={(e) => setFormProduct({ ...formProduct, supplierId: Number(e.target.value) })}>
-                    {suppliers.map((s) => <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>)}
-                  </Select>
-                </FormControl>
-              </Grid>
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">Description</label>
+            <textarea
+              className="flex w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400/80 focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 dark:placeholder-slate-600 dark:focus:border-indigo-400 dark:focus:ring-indigo-400/10 transition-all duration-200"
+              rows={2}
+              value={formProduct.description || ''} 
+              onChange={(e) => setFormProduct({ ...formProduct, description: e.target.value })}
+            />
+          </div>
 
-              <Grid item xs={12} sm={6} md={3}>
-                <TextField label="Cost Price" type="number" fullWidth slotProps={{ htmlInput: { step: '0.01', min: '0' } }} required value={formProduct.costPrice} onChange={(e) => setFormProduct({ ...formProduct, costPrice: parseFloat(e.target.value) || 0 })} />
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <TextField label="Selling Price" type="number" fullWidth slotProps={{ htmlInput: { step: '0.01', min: '0' } }} required value={formProduct.sellingPrice} onChange={(e) => setFormProduct({ ...formProduct, sellingPrice: parseFloat(e.target.value) || 0 })} />
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <TextField label="Opening Quantity" type="number" fullWidth slotProps={{ htmlInput: { min: '0', disabled: !!editId } }} required value={formProduct.openingQuantity} onChange={(e) => setFormProduct({ ...formProduct, openingQuantity: parseFloat(e.target.value) || 0 })} />
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <TextField label="Reorder Level" type="number" fullWidth slotProps={{ htmlInput: { min: '0' } }} required value={formProduct.reorderLevel} onChange={(e) => setFormProduct({ ...formProduct, reorderLevel: parseFloat(e.target.value) || 0 })} />
-              </Grid>
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 md:grid-cols-4">
+            <Select 
+              label="Category" 
+              required
+              value={formProduct.categoryId}
+              onChange={(e) => setFormProduct({ ...formProduct, categoryId: Number(e.target.value) })}
+            >
+              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </Select>
 
-              <Grid item xs={12} sm={6} md={3}>
-                <TextField label="Maximum Stock" type="number" fullWidth slotProps={{ htmlInput: { min: '0' } }} required value={formProduct.maximumStock} onChange={(e) => setFormProduct({ ...formProduct, maximumStock: parseFloat(e.target.value) || 0 })} />
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <TextField label="Shelf Location" fullWidth value={formProduct.shelfLocation} onChange={(e) => setFormProduct({ ...formProduct, shelfLocation: e.target.value })} />
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <TextField label="Lead Time (Days)" type="number" fullWidth slotProps={{ htmlInput: { min: '0' } }} required value={formProduct.leadTime} onChange={(e) => setFormProduct({ ...formProduct, leadTime: parseInt(e.target.value) || 0 })} />
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <FormControlLabel control={<Switch checked={formProduct.isActive} onChange={(e) => setFormProduct({ ...formProduct, isActive: e.target.checked })} />} label="Active" />
-              </Grid>
+            <Select 
+              label="Brand" 
+              required
+              value={formProduct.brandId}
+              onChange={(e) => setFormProduct({ ...formProduct, brandId: Number(e.target.value) })}
+            >
+              {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </Select>
 
-              <Grid item xs={12}>
-                <TextField label="Notes" fullWidth multiline rows={2} value={formProduct.notes} onChange={(e) => setFormProduct({ ...formProduct, notes: e.target.value })} />
-              </Grid>
-            </Grid>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
-            <Button type="submit" variant="contained">Save</Button>
-          </DialogActions>
+            <Select 
+              label="Unit" 
+              required
+              value={formProduct.unitId}
+              onChange={(e) => setFormProduct({ ...formProduct, unitId: Number(e.target.value) })}
+            >
+              {units.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+            </Select>
+
+            <Select 
+              label="Supplier" 
+              required
+              value={formProduct.supplierId}
+              onChange={(e) => setFormProduct({ ...formProduct, supplierId: Number(e.target.value) })}
+            >
+              {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </Select>
+          </div>
+
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 md:grid-cols-4">
+            <Input 
+              label="Cost Price" 
+              type="number" 
+              step="0.01" 
+              min="0" 
+              required 
+              value={formProduct.costPrice} 
+              onChange={(e) => setFormProduct({ ...formProduct, costPrice: parseFloat(e.target.value) || 0 })} 
+            />
+            <Input 
+              label="Selling Price" 
+              type="number" 
+              step="0.01" 
+              min="0" 
+              required 
+              value={formProduct.sellingPrice} 
+              onChange={(e) => setFormProduct({ ...formProduct, sellingPrice: parseFloat(e.target.value) || 0 })} 
+            />
+            <Input 
+              label="Opening Qty" 
+              type="number" 
+              min="0" 
+              disabled={!!editId}
+              required 
+              value={formProduct.openingQuantity} 
+              onChange={(e) => setFormProduct({ ...formProduct, openingQuantity: parseFloat(e.target.value) || 0 })} 
+            />
+            <Input 
+              label="Reorder Level" 
+              type="number" 
+              min="0" 
+              required 
+              value={formProduct.reorderLevel} 
+              onChange={(e) => setFormProduct({ ...formProduct, reorderLevel: parseFloat(e.target.value) || 0 })} 
+            />
+          </div>
+
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 md:grid-cols-4 items-end">
+            <Input 
+              label="Maximum Stock" 
+              type="number" 
+              min="0" 
+              required 
+              value={formProduct.maximumStock} 
+              onChange={(e) => setFormProduct({ ...formProduct, maximumStock: parseFloat(e.target.value) || 0 })} 
+            />
+            <Input 
+              label="Shelf Location" 
+              value={formProduct.shelfLocation || ''} 
+              onChange={(e) => setFormProduct({ ...formProduct, shelfLocation: e.target.value })} 
+            />
+            <Input 
+              label="Lead Time (Days)" 
+              type="number" 
+              min="0" 
+              required 
+              value={formProduct.leadTime} 
+              onChange={(e) => setFormProduct({ ...formProduct, leadTime: parseInt(e.target.value) || 0 })} 
+            />
+            <div className="py-2.5">
+              <Switch 
+                checked={formProduct.isActive} 
+                onChange={(checked) => setFormProduct({ ...formProduct, isActive: checked })} 
+                label="Active Status"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">Notes</label>
+            <textarea
+              className="flex w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400/80 focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 dark:placeholder-slate-600 dark:focus:border-indigo-400 dark:focus:ring-indigo-400/10 transition-all duration-200"
+              rows={2}
+              value={formProduct.notes || ''} 
+              onChange={(e) => setFormProduct({ ...formProduct, notes: e.target.value })}
+            />
+          </div>
+
+          <div className="flex justify-end space-x-3 pt-5 border-t border-slate-100 dark:border-slate-800">
+            <Button type="button" variant="outline" onClick={() => setOpenDialog(false)}>
+              Cancel
+            </Button>
+            <Button type="submit">
+              Save Product
+            </Button>
+          </div>
         </form>
       </Dialog>
-    </Box>
+    </div>
   );
 }

@@ -1,16 +1,14 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Box, Button, Dialog, DialogTitle, DialogContent, DialogActions, FormControl, InputLabel, Select, MenuItem, TextField, Typography, CircularProgress, Alert } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
-import { AgGridReact } from 'ag-grid-react';
-import type { ColDef } from 'ag-grid-community';
-import 'ag-grid-community/styles/ag-grid.css';
-import 'ag-grid-community/styles/ag-theme-quartz.css';
-
+import React, { useState, useEffect, useMemo } from 'react';
+import { Settings2, ClipboardList, Search, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from 'lucide-react';
 import { api } from '../api';
 import type { StockTransaction, Product, StockAdjustment, StockCount } from '../api';
+import { Button } from '../components/ui/Button';
+import { Dialog } from '../components/ui/Dialog';
+import { Input } from '../components/ui/Input';
+import { Select } from '../components/ui/Select';
+import { Card } from '../components/ui/Card';
 
 export default function Inventory() {
-  const theme = useTheme();
   const [ledger, setLedger] = useState<StockTransaction[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -20,6 +18,13 @@ export default function Inventory() {
   const [openAdjust, setOpenAdjust] = useState(false);
   const [openCount, setOpenCount] = useState(false);
 
+  // Search, Sort, and Pagination states
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortField, setSortField] = useState<string>('transactionDate');
+  const [sortAsc, setSortAsc] = useState<boolean>(false); // default descending to show newest first
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const itemsPerPage = 12;
+
   // Form states
   const [adjustForm, setAdjustForm] = useState<StockAdjustment>({
     productId: 0, quantity: 0, adjustmentType: 'Plus', reason: ''
@@ -27,8 +32,6 @@ export default function Inventory() {
   const [countForm, setCountForm] = useState<StockCount>({
     productId: 0, physicalQuantity: 0, systemQuantity: 0, remarks: ''
   });
-
-  const gridRef = useRef<AgGridReact>(null);
 
   async function loadData() {
     setLoading(true);
@@ -108,132 +111,353 @@ export default function Inventory() {
     }
   };
 
-  // AG Grid config
-  const columnDefs = useMemo<ColDef[]>(() => [
-    { field: 'transactionDate', headerName: 'Date/Time', width: 180, valueFormatter: (p) => new Date(p.value).toLocaleString() },
-    { field: 'product.sku', headerName: 'SKU', width: 120, filter: true },
-    { field: 'product.name', headerName: 'Product', width: 200, filter: true },
-    {
-      field: 'transactionType',
-      headerName: 'Type',
-      width: 140,
-      cellStyle: (p) => {
-        if (p.value === 'Purchase' || p.value === 'Opening' || p.value === 'Adjustment+') return { color: '#2e7d32', fontWeight: 500 };
-        return { color: '#d32f2f', fontWeight: 500 };
-      }
-    },
-    { field: 'quantityIn', headerName: 'Qty In', width: 100, type: 'numericColumn' },
-    { field: 'quantityOut', headerName: 'Qty Out', width: 100, type: 'numericColumn' },
-    { field: 'runningBalance', headerName: 'Running Bal', width: 120, type: 'numericColumn' },
-    { field: 'reference', headerName: 'Reference', width: 220 }
-  ], [products]);
+  // Sort helper
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortAsc(!sortAsc);
+    } else {
+      setSortField(field);
+      setSortAsc(true);
+    }
+    setCurrentPage(1);
+  };
 
-  const defaultColDef = useMemo<ColDef>(() => ({
-    sortable: true,
-    resizable: true,
-  }), []);
+  // Compute filtered & sorted ledger list
+  const filteredSortedLedger = useMemo(() => {
+    let result = [...ledger];
+
+    // 1. Filter
+    if (searchTerm) {
+      const lower = searchTerm.toLowerCase();
+      result = result.filter(
+        (tx) =>
+          tx.transactionType.toLowerCase().includes(lower) ||
+          (tx.reference && tx.reference.toLowerCase().includes(lower)) ||
+          (tx.product?.name && tx.product.name.toLowerCase().includes(lower)) ||
+          (tx.product?.sku && tx.product.sku.toLowerCase().includes(lower))
+      );
+    }
+
+    // 2. Sort
+    result.sort((a: any, b: any) => {
+      let valA: any = a[sortField];
+      let valB: any = b[sortField];
+
+      // Nested object field logic
+      if (sortField.includes('.')) {
+        const parts = sortField.split('.');
+        valA = a[parts[0]]?.[parts[1]];
+        valB = b[parts[0]]?.[parts[1]];
+      }
+
+      if (valA === undefined || valA === null) return 1;
+      if (valB === undefined || valB === null) return -1;
+
+      if (typeof valA === 'string') {
+        return sortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+      } else {
+        return sortAsc ? valA - valB : valB - valA;
+      }
+    });
+
+    return result;
+  }, [ledger, searchTerm, sortField, sortAsc]);
+
+  // Pagination computations
+  const totalItems = filteredSortedLedger.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
+  const paginatedLedger = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredSortedLedger.slice(start, start + itemsPerPage);
+  }, [filteredSortedLedger, currentPage]);
+
+  const startRange = totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
+  const endRange = Math.min(currentPage * itemsPerPage, totalItems);
+
+  // Change page handler
+  const handlePageChange = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
+
+  const difference = countForm.physicalQuantity - countForm.systemQuantity;
 
   return (
-    <Box sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" sx={{ fontWeight: 600 }}>Stock Ledger & Controls</Typography>
-        <Box sx={{ display: 'flex', gap: 2 }}>
-          <Button variant="contained" color="secondary" onClick={handleOpenAdjust} disabled={products.length === 0}>
-            Manual Adjustment
+    <div className="flex flex-col h-full space-y-6">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">Stock Ledger</h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">View audit logs and make stock adjustments.</p>
+        </div>
+        
+        <div className="flex flex-wrap gap-3">
+          <div className="relative w-60">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search ledger..."
+              value={searchTerm}
+              onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm placeholder-slate-400/80 focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 transition-all duration-200"
+            />
+          </div>
+          <Button variant="outline" className="inline-flex items-center space-x-2" onClick={handleOpenAdjust} disabled={products.length === 0}>
+            <Settings2 size={16} />
+            <span>Manual Adjustment</span>
           </Button>
-          <Button variant="contained" onClick={handleOpenCount} disabled={products.length === 0}>
-            Physical Stock Count
+          <Button className="inline-flex items-center space-x-2" onClick={handleOpenCount} disabled={products.length === 0}>
+            <ClipboardList size={16} />
+            <span>Physical Count</span>
           </Button>
-        </Box>
-      </Box>
+        </div>
+      </div>
 
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-655 dark:border-red-900/50 dark:bg-red-950/20 dark:text-red-400">
+          {error}
+        </div>
+      )}
 
       {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress /></Box>
+        <div className="flex h-[400px] items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-650 border-t-transparent dark:border-indigo-400" />
+        </div>
       ) : (
-        <div className={theme.palette.mode === 'dark' ? 'ag-theme-quartz-dark' : 'ag-theme-quartz'} style={{ flexGrow: 1, height: '600px', width: '100%', boxShadow: 'var(--shadow-md)' }}>
-          <AgGridReact
-            ref={gridRef}
-            rowData={ledger}
-            columnDefs={columnDefs}
-            defaultColDef={defaultColDef}
-            pagination={true}
-            paginationPageSize={15}
-          />
+        <div className="space-y-4">
+          <Card className="p-0 overflow-hidden border border-slate-200/60 dark:border-slate-800/80 shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm text-slate-500 dark:text-slate-400">
+                <thead className="bg-slate-550/5 text-2xs font-extrabold uppercase tracking-wider text-slate-400 dark:bg-slate-900/40 border-b border-slate-200/50 dark:border-slate-800/60 select-none">
+                  <tr>
+                    <th onClick={() => handleSort('transactionDate')} className="px-6 py-4 cursor-pointer hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
+                      <div className="flex items-center space-x-1">
+                        <span>Date/Time</span>
+                        {sortField === 'transactionDate' && (sortAsc ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                      </div>
+                    </th>
+                    <th onClick={() => handleSort('product.sku')} className="px-6 py-4 cursor-pointer hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
+                      <div className="flex items-center space-x-1">
+                        <span>SKU</span>
+                        {sortField === 'product.sku' && (sortAsc ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                      </div>
+                    </th>
+                    <th onClick={() => handleSort('product.name')} className="px-6 py-4 cursor-pointer hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
+                      <div className="flex items-center space-x-1">
+                        <span>Product</span>
+                        {sortField === 'product.name' && (sortAsc ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                      </div>
+                    </th>
+                    <th onClick={() => handleSort('transactionType')} className="px-6 py-4 cursor-pointer hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
+                      <div className="flex items-center space-x-1">
+                        <span>Type</span>
+                        {sortField === 'transactionType' && (sortAsc ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                      </div>
+                    </th>
+                    <th onClick={() => handleSort('quantityIn')} className="px-6 py-4 cursor-pointer hover:text-slate-700 dark:hover:text-slate-200 transition-colors text-right">
+                      <div className="flex items-center justify-end space-x-1">
+                        <span>Qty In</span>
+                        {sortField === 'quantityIn' && (sortAsc ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                      </div>
+                    </th>
+                    <th onClick={() => handleSort('quantityOut')} className="px-6 py-4 cursor-pointer hover:text-slate-700 dark:hover:text-slate-200 transition-colors text-right">
+                      <div className="flex items-center justify-end space-x-1">
+                        <span>Qty Out</span>
+                        {sortField === 'quantityOut' && (sortAsc ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                      </div>
+                    </th>
+                    <th onClick={() => handleSort('runningBalance')} className="px-6 py-4 cursor-pointer hover:text-slate-700 dark:hover:text-slate-200 transition-colors text-right">
+                      <div className="flex items-center justify-end space-x-1">
+                        <span>Running Bal</span>
+                        {sortField === 'runningBalance' && (sortAsc ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                      </div>
+                    </th>
+                    <th onClick={() => handleSort('reference')} className="px-6 py-4 cursor-pointer hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
+                      <div className="flex items-center space-x-1">
+                        <span>Reference</span>
+                        {sortField === 'reference' && (sortAsc ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                      </div>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
+                  {paginatedLedger.map((tx) => {
+                    const isPlus = tx.transactionType === 'Purchase' || tx.transactionType === 'Opening' || tx.transactionType === 'Adjustment+';
+                    return (
+                      <tr key={tx.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/10 transition-colors">
+                        <td className="px-6 py-3.5 text-xs text-slate-500 dark:text-slate-450">{new Date(tx.transactionDate).toLocaleString()}</td>
+                        <td className="px-6 py-3.5 font-mono text-xs">{tx.product?.sku}</td>
+                        <td className="px-6 py-3.5 font-bold text-slate-900 dark:text-slate-200">{tx.product?.name}</td>
+                        <td className="px-6 py-3.5">
+                          <span className={`text-3xs font-extrabold uppercase tracking-wide px-2.5 py-0.5 rounded-full border ${
+                            isPlus
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-250/10 dark:bg-emerald-950/20 dark:text-emerald-400'
+                              : 'bg-rose-50 text-rose-700 border-rose-250/10 dark:bg-rose-950/20 dark:text-rose-400'
+                          }`}>
+                            {tx.transactionType}
+                          </span>
+                        </td>
+                        <td className="px-6 py-3.5 text-right font-extrabold text-slate-700 dark:text-slate-350">{tx.quantityIn > 0 ? `+${tx.quantityIn}` : '-'}</td>
+                        <td className="px-6 py-3.5 text-right font-extrabold text-rose-600 dark:text-rose-400">{tx.quantityOut > 0 ? `-${tx.quantityOut}` : '-'}</td>
+                        <td className="px-6 py-3.5 text-right font-bold text-indigo-650 dark:text-indigo-400">{tx.runningBalance}</td>
+                        <td className="px-6 py-3.5 text-slate-450 truncate max-w-xs">{tx.reference || '-'}</td>
+                      </tr>
+                    );
+                  })}
+                  {filteredSortedLedger.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="py-12 text-center text-slate-400 font-medium">
+                        No ledger transactions found matching your search.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-4 px-2 py-1">
+              <p className="text-xs font-semibold text-slate-400">
+                Showing <span className="text-slate-650 dark:text-slate-300">{startRange}</span> to <span className="text-slate-650 dark:text-slate-300">{endRange}</span> of <span className="text-slate-650 dark:text-slate-300">{totalItems}</span> transactions
+              </p>
+              
+              <div className="flex items-center space-x-1.5">
+                <button
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-900 disabled:opacity-40 disabled:hover:bg-transparent cursor-pointer transition-colors"
+                >
+                  <ChevronLeft size={14} />
+                </button>
+                
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                  if (page === 1 || page === totalPages || Math.abs(page - currentPage) <= 1) {
+                    return (
+                      <button
+                        key={page}
+                        onClick={() => handlePageChange(page)}
+                        className={`px-3 py-1.5 text-xs font-bold rounded-lg cursor-pointer transition-all ${
+                          currentPage === page
+                            ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-sm'
+                            : 'border border-slate-200 dark:border-slate-800 text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-900'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    );
+                  }
+                  if (page === 2 || page === totalPages - 1) {
+                    return <span key={page} className="text-slate-400 px-1 text-xs">...</span>;
+                  }
+                  return null;
+                })}
+
+                <button
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-900 disabled:opacity-40 disabled:hover:bg-transparent cursor-pointer transition-colors"
+                >
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* Manual Stock Adjustment Dialog */}
-      <Dialog open={openAdjust} onClose={() => setOpenAdjust(false)} maxWidth="xs" fullWidth>
-        <form onSubmit={handleSaveAdjust}>
-          <DialogTitle>Manual Stock Adjustment</DialogTitle>
-          <DialogContent dividers>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
-              <FormControl fullWidth required>
-                <InputLabel>Product</InputLabel>
-                <Select value={adjustForm.productId} label="Product" onChange={(e) => setAdjustForm({ ...adjustForm, productId: Number(e.target.value) })}>
-                  {products.map(p => <MenuItem key={p.id} value={p.id}>{p.name} ({p.sku})</MenuItem>)}
-                </Select>
-              </FormControl>
+      <Dialog open={openAdjust} onClose={() => setOpenAdjust(false)} title="Manual Stock Adjustment" size="sm">
+        <form onSubmit={handleSaveAdjust} className="space-y-5">
+          <Select
+            label="Product"
+            value={adjustForm.productId}
+            onChange={(e) => setAdjustForm({ ...adjustForm, productId: Number(e.target.value) })}
+          >
+            {products.map(p => <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>)}
+          </Select>
 
-              <FormControl fullWidth required>
-                <InputLabel>Adjustment Type</InputLabel>
-                <Select value={adjustForm.adjustmentType} label="Adjustment Type" onChange={(e) => setAdjustForm({ ...adjustForm, adjustmentType: e.target.value })}>
-                  <MenuItem value="Plus">Add Stock (Plus)</MenuItem>
-                  <MenuItem value="Minus">Reduce Stock (Minus)</MenuItem>
-                  <MenuItem value="Damaged">Damaged Goods (Minus)</MenuItem>
-                  <MenuItem value="Expired">Expired Goods (Minus)</MenuItem>
-                </Select>
-              </FormControl>
+          <Select
+            label="Adjustment Type"
+            value={adjustForm.adjustmentType}
+            onChange={(e) => setAdjustForm({ ...adjustForm, adjustmentType: e.target.value })}
+          >
+            <option value="Plus">Add Stock (Plus)</option>
+            <option value="Minus">Reduce Stock (Minus)</option>
+            <option value="Damaged">Damaged Goods (Minus)</option>
+            <option value="Expired">Expired Goods (Minus)</option>
+          </Select>
 
-              <TextField label="Quantity" type="number" fullWidth slotProps={{ htmlInput: { min: '0.01', step: 'any' } }} required value={adjustForm.quantity} onChange={(e) => setAdjustForm({ ...adjustForm, quantity: parseFloat(e.target.value) || 0 })} />
-              
-              <TextField label="Reason" fullWidth required value={adjustForm.reason} onChange={(e) => setAdjustForm({ ...adjustForm, reason: e.target.value })} />
-            </Box>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setOpenAdjust(false)}>Cancel</Button>
-            <Button type="submit" variant="contained">Post Adjustment</Button>
-          </DialogActions>
+          <Input
+            label="Quantity"
+            type="number"
+            step="any"
+            min="0.01"
+            required
+            value={adjustForm.quantity}
+            onChange={(e) => setAdjustForm({ ...adjustForm, quantity: parseFloat(e.target.value) || 0 })}
+          />
+
+          <Input
+            label="Reason"
+            required
+            value={adjustForm.reason}
+            onChange={(e) => setAdjustForm({ ...adjustForm, reason: e.target.value })}
+          />
+
+          <div className="flex justify-end space-x-3 pt-5 border-t border-slate-100 dark:border-slate-800">
+            <Button type="button" variant="outline" onClick={() => setOpenAdjust(false)}>Cancel</Button>
+            <Button type="submit">Post Adjustment</Button>
+          </div>
         </form>
       </Dialog>
 
       {/* Physical Stock Count Dialog */}
-      <Dialog open={openCount} onClose={() => setOpenCount(false)} maxWidth="xs" fullWidth>
-        <form onSubmit={handleSaveCount}>
-          <DialogTitle>Physical Stock Count</DialogTitle>
-          <DialogContent dividers>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
-              <FormControl fullWidth required>
-                <InputLabel>Product</InputLabel>
-                <Select value={countForm.productId} label="Product" onChange={(e) => handleCountProductChange(Number(e.target.value))}>
-                  {products.map(p => <MenuItem key={p.id} value={p.id}>{p.name} ({p.sku})</MenuItem>)}
-                </Select>
-              </FormControl>
+      <Dialog open={openCount} onClose={() => setOpenCount(false)} title="Physical Stock Count" size="sm">
+        <form onSubmit={handleSaveCount} className="space-y-5">
+          <Select
+            label="Product"
+            value={countForm.productId}
+            onChange={(e) => handleCountProductChange(Number(e.target.value))}
+          >
+            {products.map(p => <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>)}
+          </Select>
 
-              <TextField label="System Quantity" type="number" fullWidth disabled value={countForm.systemQuantity} />
-              
-              <TextField label="Physical Quantity" type="number" fullWidth required value={countForm.physicalQuantity} onChange={(e) => setCountForm({ ...countForm, physicalQuantity: parseFloat(e.target.value) || 0 })} />
+          <Input
+            label="System Quantity"
+            type="number"
+            disabled
+            value={countForm.systemQuantity}
+          />
 
-              <Box sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
-                <Typography variant="body2">
-                  Difference:{' '}
-                  <span style={{ fontWeight: 'bold', color: (countForm.physicalQuantity - countForm.systemQuantity) >= 0 ? '#2e7d32' : '#d32f2f' }}>
-                    {(countForm.physicalQuantity - countForm.systemQuantity).toFixed(2)}
-                  </span>
-                </Typography>
-              </Box>
+          <Input
+            label="Physical Quantity"
+            type="number"
+            required
+            value={countForm.physicalQuantity}
+            onChange={(e) => setCountForm({ ...countForm, physicalQuantity: parseFloat(e.target.value) || 0 })}
+          />
 
-              <TextField label="Remarks / Notes" fullWidth value={countForm.remarks} onChange={(e) => setCountForm({ ...countForm, remarks: e.target.value })} />
-            </Box>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setOpenCount(false)}>Cancel</Button>
-            <Button type="submit" variant="contained">Post Count</Button>
-          </DialogActions>
+          <div className="rounded-2xl bg-slate-50 dark:bg-slate-950/40 p-5 border border-slate-200/40 dark:border-slate-800 flex justify-between items-center text-sm font-bold">
+            <span className="text-slate-400">Difference:</span>
+            <span className={difference >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-455"}>
+              {difference >= 0 ? `+${difference.toFixed(2)}` : difference.toFixed(2)}
+            </span>
+          </div>
+
+          <Input
+            label="Remarks / Notes"
+            value={countForm.remarks || ''}
+            onChange={(e) => setCountForm({ ...countForm, remarks: e.target.value })}
+          />
+
+          <div className="flex justify-end space-x-3 pt-5 border-t border-slate-100 dark:border-slate-800">
+            <Button type="button" variant="outline" onClick={() => setOpenCount(false)}>Cancel</Button>
+            <Button type="submit">Post Count</Button>
+          </div>
         </form>
       </Dialog>
-    </Box>
+    </div>
   );
 }

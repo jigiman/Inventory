@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Box, Button, Dialog, DialogTitle, DialogContent, DialogActions, Grid, FormControl, InputLabel, Select, MenuItem, TextField, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Typography, CircularProgress, Alert, IconButton } from '@mui/material';
-import DeleteIcon from '@mui/icons-material/Delete';
-import AddIcon from '@mui/icons-material/Add';
+import { Trash2, Plus, ArrowDownRight, Clipboard } from 'lucide-react';
 import { api } from '../api';
 import type { PurchaseOrder, Supplier, Product, PurchaseItem } from '../api';
+import { Button } from '../components/ui/Button';
+import { Dialog } from '../components/ui/Dialog';
+import { Input } from '../components/ui/Input';
+import { Select } from '../components/ui/Select';
+import { Card } from '../components/ui/Card';
 
 export default function Purchasing() {
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
@@ -121,144 +124,189 @@ export default function Purchasing() {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" sx={{ fontWeight: 600 }}>Purchasing (Purchase Orders)</Typography>
-        <Button variant="contained" onClick={() => setOpenCreate(true)} disabled={suppliers.length === 0 || products.length === 0}>
-          New Purchase Order
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">Purchasing</h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Create and receive Purchase Orders (PO).</p>
+        </div>
+        <Button onClick={() => setOpenCreate(true)} disabled={suppliers.length === 0 || products.length === 0} className="inline-flex items-center space-x-2">
+          <Plus size={16} />
+          <span>New Purchase Order</span>
         </Button>
-      </Box>
+      </div>
 
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-650 dark:border-red-900/50 dark:bg-red-950/20 dark:text-red-400">
+          {error}
+        </div>
+      )}
 
       {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress /></Box>
+        <div className="flex h-[300px] items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-650 border-t-transparent dark:border-indigo-400" />
+        </div>
       ) : (
-        <TableContainer component={Paper} sx={{ boxShadow: 'var(--shadow-md)' }}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Order Number</TableCell>
-                <TableCell>Supplier</TableCell>
-                <TableCell>Order Date</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
+        <Card className="p-0 overflow-hidden border border-slate-200/60 dark:border-slate-800/80 shadow-sm">
+          <table className="w-full text-left text-sm text-slate-500 dark:text-slate-400">
+            <thead className="bg-slate-550/5 text-2xs font-extrabold uppercase tracking-wider text-slate-400 dark:bg-slate-900/40 border-b border-slate-200/50 dark:border-slate-800/60">
+              <tr>
+                <th className="px-6 py-4">Order Number</th>
+                <th className="px-6 py-4">Supplier</th>
+                <th className="px-6 py-4">Order Date</th>
+                <th className="px-6 py-4">Status</th>
+                <th className="px-6 py-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
               {orders.map((order) => (
-                <TableRow key={order.id}>
-                  <TableCell>{order.orderNumber}</TableCell>
-                  <TableCell>{order.supplier?.name}</TableCell>
-                  <TableCell>{order.orderDate ? new Date(order.orderDate).toLocaleDateString() : ''}</TableCell>
-                  <TableCell>
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        color: order.status === 'Received' ? 'success.main' : 'warning.main',
-                        fontWeight: 'bold'
-                      }}
+                <tr key={order.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/10 transition-colors">
+                  <td className="px-6 py-4 font-bold text-slate-900 dark:text-slate-200">{order.orderNumber}</td>
+                  <td className="px-6 py-4 font-medium">{order.supplier?.name}</td>
+                  <td className="px-6 py-4 text-slate-450">{order.orderDate ? new Date(order.orderDate).toLocaleDateString() : ''}</td>
+                  <td className="px-6 py-4">
+                    <span
+                      className={`text-3xs font-extrabold uppercase tracking-wide px-2.5 py-0.5 rounded-full border ${
+                        order.status === 'Received'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-250/10 dark:bg-emerald-950/20 dark:text-emerald-400'
+                          : 'bg-amber-50 text-amber-700 border-amber-250/10 dark:bg-amber-950/20 dark:text-amber-400'
+                      }`}
                     >
                       {order.status}
-                    </Typography>
-                  </TableCell>
-                  <TableCell align="right">
-                    {order.status !== 'Received' && (
-                      <Button variant="outlined" size="small" onClick={() => handleOpenReceive(order)}>
-                        Receive Items
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    {order.status !== 'Received' ? (
+                      <Button variant="outline" size="sm" onClick={() => handleOpenReceive(order)} className="inline-flex items-center space-x-1.5">
+                        <ArrowDownRight size={14} />
+                        <span>Receive Items</span>
                       </Button>
+                    ) : (
+                      <span className="inline-flex items-center text-xs font-semibold text-slate-400 space-x-1">
+                        <Clipboard size={14} />
+                        <span>Completed</span>
+                      </span>
                     )}
-                  </TableCell>
-                </TableRow>
+                  </td>
+                </tr>
               ))}
               {orders.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={5} align="center">No Purchase Orders created yet.</TableCell>
-                </TableRow>
+                <tr>
+                  <td colSpan={5} className="py-12 text-center text-slate-400 font-medium">
+                    No Purchase Orders created yet.
+                  </td>
+                </tr>
               )}
-            </TableBody>
-          </Table>
-        </TableContainer>
+            </tbody>
+          </table>
+        </Card>
       )}
 
       {/* Create PO Dialog */}
-      <Dialog open={openCreate} onClose={() => setOpenCreate(false)} maxWidth="md" fullWidth>
-        <DialogTitle>Create Purchase Order</DialogTitle>
-        <DialogContent dividers>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, mt: 1 }}>
-            <FormControl fullWidth>
-              <InputLabel>Supplier</InputLabel>
-              <Select value={selectedSupplierId} label="Supplier" onChange={(e) => setSelectedSupplierId(Number(e.target.value))}>
-                {suppliers.map(s => <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>)}
-              </Select>
-            </FormControl>
+      <Dialog open={openCreate} onClose={() => setOpenCreate(false)} title="Create Purchase Order" size="lg">
+        <form onSubmit={(e) => { e.preventDefault(); handleSavePo(); }} className="space-y-6">
+          <Select
+            label="Supplier"
+            value={selectedSupplierId}
+            onChange={(e) => setSelectedSupplierId(Number(e.target.value))}
+          >
+            {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </Select>
 
-            <Typography variant="h6">Items</Typography>
-
-            {poItems.map((item, idx) => (
-              <Grid container spacing={2} key={idx} alignItems="center">
-                <Grid item xs={6}>
-                  <FormControl fullWidth>
-                    <InputLabel>Product</InputLabel>
-                    <Select value={item.productId} label="Product" onChange={(e) => handlePoItemChange(idx, 'productId', Number(e.target.value))}>
-                      {products.map(p => <MenuItem key={p.id} value={p.id}>{p.name} ({p.sku})</MenuItem>)}
+          <div className="border-t border-slate-100 dark:border-slate-800 pt-5">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-4">Items to Order</h3>
+            
+            <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
+              {poItems.map((item, idx) => (
+                <div key={idx} className="flex gap-4 items-end">
+                  <div className="flex-1">
+                    <Select
+                      label="Product"
+                      value={item.productId}
+                      onChange={(e) => handlePoItemChange(idx, 'productId', Number(e.target.value))}
+                    >
+                      {products.map(p => <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>)}
                     </Select>
-                  </FormControl>
-                </Grid>
-                <Grid item xs={2}>
-                  <TextField label="Qty" type="number" fullWidth value={item.quantityOrdered} onChange={(e) => handlePoItemChange(idx, 'quantityOrdered', parseFloat(e.target.value) || 0)} />
-                </Grid>
-                <Grid item xs={3}>
-                  <TextField label="Cost" type="number" fullWidth slotProps={{ htmlInput: { step: '0.01' } }} value={item.costPrice} onChange={(e) => handlePoItemChange(idx, 'costPrice', parseFloat(e.target.value) || 0)} />
-                </Grid>
-                <Grid item xs={1}>
-                  <IconButton color="error" onClick={() => handleRemovePoItem(idx)} disabled={poItems.length === 1}>
-                    <DeleteIcon />
-                  </IconButton>
-                </Grid>
-              </Grid>
-            ))}
+                  </div>
+                  <div className="w-24">
+                    <Input
+                      label="Qty"
+                      type="number"
+                      min="1"
+                      value={item.quantityOrdered}
+                      onChange={(e) => handlePoItemChange(idx, 'quantityOrdered', parseFloat(e.target.value) || 0)}
+                    />
+                  </div>
+                  <div className="w-32">
+                    <Input
+                      label="Cost"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={item.costPrice}
+                      onChange={(e) => handlePoItemChange(idx, 'costPrice', parseFloat(e.target.value) || 0)}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleRemovePoItem(idx)}
+                    disabled={poItems.length === 1}
+                    className="p-2.5 mb-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 disabled:opacity-50 rounded-xl cursor-pointer transition-colors"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
 
-            <Button startIcon={<AddIcon />} onClick={handleAddPoItem} sx={{ alignSelf: 'flex-start' }}>
-              Add Item
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-4 inline-flex items-center space-x-1.5"
+              onClick={handleAddPoItem}
+            >
+              <Plus size={14} />
+              <span>Add Item</span>
             </Button>
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenCreate(false)}>Cancel</Button>
-          <Button onClick={handleSavePo} variant="contained">Create Order</Button>
-        </DialogActions>
+          </div>
+
+          <div className="flex justify-end space-x-3 pt-5 border-t border-slate-100 dark:border-slate-800">
+            <Button type="button" variant="outline" onClick={() => setOpenCreate(false)}>Cancel</Button>
+            <Button type="submit">Create Order</Button>
+          </div>
+        </form>
       </Dialog>
 
       {/* Receive PO Dialog */}
-      <Dialog open={openReceive} onClose={() => setOpenReceive(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Receive Purchase Order: {selectedOrder?.orderNumber}</DialogTitle>
-        <DialogContent dividers>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+      <Dialog open={openReceive} onClose={() => setOpenReceive(false)} title={`Receive Purchase Order: ${selectedOrder?.orderNumber}`} size="md">
+        <form onSubmit={(e) => { e.preventDefault(); handleSaveReceive(); }} className="space-y-6">
+          <div className="space-y-4 max-h-[350px] overflow-y-auto pr-1">
             {selectedOrder?.items.map(item => (
-              <Grid container spacing={2} key={item.productId} alignItems="center">
-                <Grid item xs={6}>
-                  <Typography variant="body1">{item.product?.name}</Typography>
-                  <Typography variant="caption" color="textSecondary">Ordered: {item.quantityOrdered}</Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <TextField
-                    label="Quantity Received"
+              <div key={item.productId} className="flex gap-4 items-center justify-between py-3.5 border-b border-slate-100 dark:border-slate-800/40">
+                <div className="flex-1">
+                  <p className="font-bold text-slate-805 dark:text-slate-200">{item.product?.name}</p>
+                  <p className="text-xs text-slate-400 font-semibold mt-0.5">Ordered Qty: {item.quantityOrdered}</p>
+                </div>
+                <div className="w-40">
+                  <Input
+                    label="Received Qty"
                     type="number"
-                    fullWidth
+                    min="0"
                     value={receiveQuantities[item.productId] ?? 0}
                     onChange={(e) => setReceiveQuantities({ ...receiveQuantities, [item.productId]: parseFloat(e.target.value) || 0 })}
                   />
-                </Grid>
-              </Grid>
+                </div>
+              </div>
             ))}
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenReceive(false)}>Cancel</Button>
-          <Button onClick={handleSaveReceive} variant="contained">Post to Inventory</Button>
-        </DialogActions>
+          </div>
+
+          <div className="flex justify-end space-x-3 pt-5 border-t border-slate-100 dark:border-slate-800">
+            <Button type="button" variant="outline" onClick={() => setOpenReceive(false)}>Cancel</Button>
+            <Button type="submit">Post to Inventory</Button>
+          </div>
+        </form>
       </Dialog>
-    </Box>
+    </div>
   );
 }

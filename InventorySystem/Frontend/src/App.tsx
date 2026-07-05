@@ -1,14 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { ThemeProvider, createTheme, CssBaseline, Box, Drawer, AppBar, Toolbar, List, Typography, ListItem, ListItemButton, ListItemIcon, ListItemText, IconButton } from '@mui/material';
-import DashboardIcon from '@mui/icons-material/Dashboard';
-import Inventory2Icon from '@mui/icons-material/Inventory2';
-import SettingsIcon from '@mui/icons-material/Settings';
-import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
-import BusinessIcon from '@mui/icons-material/Business';
-import AssessmentIcon from '@mui/icons-material/Assessment';
-import LightModeIcon from '@mui/icons-material/LightMode';
-import DarkModeIcon from '@mui/icons-material/DarkMode';
-import StorageIcon from '@mui/icons-material/Storage';
+import { useState, useEffect } from 'react';
+import { 
+   LayoutDashboard, 
+   Package, 
+   Building2, 
+   FileText, 
+   Database, 
+   TrendingUp, 
+   Settings as SettingsIcon, 
+   Sun, 
+   Moon 
+} from 'lucide-react';
 
 import Dashboard from './pages/Dashboard';
 import Products from './pages/Products';
@@ -18,8 +19,6 @@ import Inventory from './pages/Inventory';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import { api } from './api';
-
-const drawerWidth = 240;
 
 export default function App() {
   const [activePage, setActivePage] = useState('dashboard');
@@ -38,136 +37,90 @@ export default function App() {
       }
     }
     loadStoreName();
-  }, [activePage]); // Refresh when switching pages (in case name changed in Settings)
+  }, [activePage]);
 
-  // Custom premium theme configuration
-  const theme = React.useMemo(
-    () =>
-      createTheme({
-        palette: {
-          mode: darkMode ? 'dark' : 'light',
-          primary: {
-            main: '#6366f1', // Indigo
-          },
-          secondary: {
-            main: '#ec4899', // Pink/Rose
-          },
-          background: {
-            default: darkMode ? '#0b0f19' : '#f8fafc',
-            paper: darkMode ? '#111827' : '#ffffff',
-          },
-        },
-        typography: {
-          fontFamily: 'Inter, system-ui, sans-serif',
-          h4: {
-            fontWeight: 700,
-          },
-          h6: {
-            fontWeight: 600,
-          },
-        },
-        components: {
-          MuiButton: {
-            styleOverrides: {
-              root: {
-                textTransform: 'none',
-                borderRadius: '8px',
-              },
-            },
-          },
-          MuiCard: {
-            styleOverrides: {
-              root: {
-                borderRadius: '12px',
-              },
-            },
-          },
-        },
-      }),
-    [darkMode]
-  );
+  // Sync dark mode class with HTML tag for Tailwind dark: modifiers
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [darkMode]);
 
   const navigationItems = [
-    { id: 'dashboard', text: 'Dashboard', icon: <DashboardIcon /> },
-    { id: 'products', text: 'Products', icon: <Inventory2Icon /> },
-    { id: 'masters', text: 'Masters', icon: <BusinessIcon /> },
-    { id: 'purchasing', text: 'Purchasing', icon: <ReceiptLongIcon /> },
-    { id: 'inventory', text: 'Inventory Ledger', icon: <StorageIcon /> },
-    { id: 'reports', text: 'Reports', icon: <AssessmentIcon /> },
-    { id: 'settings', text: 'Settings', icon: <SettingsIcon /> },
+    { id: 'dashboard', text: 'Dashboard', icon: <LayoutDashboard size={18} /> },
+    { id: 'products', text: 'Products', icon: <Package size={18} /> },
+    { id: 'masters', text: 'Masters', icon: <Building2 size={18} /> },
+    { id: 'purchasing', text: 'Purchasing', icon: <FileText size={18} /> },
+    { id: 'inventory', text: 'Stock Ledger', icon: <Database size={18} /> },
+    { id: 'reports', text: 'Reports', icon: <TrendingUp size={18} /> },
+    { id: 'settings', text: 'Settings', icon: <SettingsIcon size={18} /> },
   ];
 
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <Box sx={{ display: 'flex', minHeight: '100vh' }}>
-        {/* AppBar header */}
-        <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1, boxShadow: 'none', borderBottom: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', color: 'text.primary' }}>
-          <Toolbar>
-            <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1, fontWeight: 'bold', color: 'primary.main' }}>
-              {storeName}
-            </Typography>
-            <IconButton onClick={() => setDarkMode(!darkMode)} color="inherit">
-              {darkMode ? <LightModeIcon /> : <DarkModeIcon />}
-            </IconButton>
-          </Toolbar>
-        </AppBar>
+    <div className="flex min-h-screen bg-slate-50 text-slate-900 dark:bg-[#070b13] dark:text-slate-100 transition-colors duration-300">
+      
+      {/* Top Navigation Bar with glassmorphism */}
+      <header className="fixed top-0 left-0 right-0 z-40 flex h-16 items-center justify-between border-b border-slate-200/50 bg-white/80 px-8 backdrop-blur-lg dark:border-slate-800/40 dark:bg-slate-950/80">
+        <div className="flex items-center space-x-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-500/20">
+            <Package size={20} className="animate-pulse" />
+          </div>
+          <span className="text-xl font-extrabold tracking-tight bg-gradient-to-r from-indigo-650 to-violet-600 bg-clip-text text-transparent dark:from-indigo-400 dark:to-violet-400">
+            {storeName}
+          </span>
+        </div>
+        <div>
+          <button 
+            onClick={() => setDarkMode(!darkMode)} 
+            className="rounded-xl p-2.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-slate-100 transition-all duration-300 cursor-pointer shadow-sm border border-slate-200/30 dark:border-slate-800"
+          >
+            {darkMode ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+        </div>
+      </header>
 
-        {/* Sidebar Drawer */}
-        <Drawer
-          variant="permanent"
-          sx={{
-            width: drawerWidth,
-            flexShrink: 0,
-            [`& .MuiDrawer-paper`]: { width: drawerWidth, boxSizing: 'border-box', borderRight: '1px solid', borderColor: 'divider' },
-          }}
-        >
-          <Toolbar />
-          <Box sx={{ overflow: 'auto', mt: 2 }}>
-            <List>
-              {navigationItems.map((item) => (
-                <ListItem key={item.id} disablePadding>
-                  <ListItemButton
-                    selected={activePage === item.id}
-                    onClick={() => setActivePage(item.id)}
-                    sx={{
-                      mx: 1,
-                      borderRadius: '8px',
-                      mb: 0.5,
-                      '&.Mui-selected': {
-                        bgcolor: 'primary.light',
-                        color: 'primary.contrastText',
-                        '& .MuiListItemIcon-root': {
-                          color: 'primary.contrastText',
-                        },
-                      },
-                    }}
-                  >
-                    <ListItemIcon sx={{ minWidth: 40, color: activePage === item.id ? 'inherit' : 'text.secondary' }}>
-                      {item.icon}
-                    </ListItemIcon>
-                    <ListItemText primary={item.text} primaryTypographyProps={{ fontSize: '14px', fontWeight: activePage === item.id ? 600 : 500 }} />
-                  </ListItemButton>
-                </ListItem>
-              ))}
-            </List>
-          </Box>
-        </Drawer>
+      {/* Sidebar Navigation */}
+      <aside className="fixed bottom-0 top-16 left-0 z-30 w-64 border-r border-slate-200/50 bg-white/50 pt-8 backdrop-blur-md dark:border-slate-800/40 dark:bg-slate-950/40">
+        <nav className="space-y-2 px-4">
+          {navigationItems.map((item) => {
+            const isActive = activePage === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActivePage(item.id)}
+                className={`relative flex w-full items-center space-x-3.5 rounded-xl px-4 py-3 text-sm font-semibold transition-all duration-300 cursor-pointer group active:scale-[0.98] ${
+                  isActive 
+                    ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-500/10' 
+                    : 'text-slate-650 hover:bg-slate-100/60 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-900/60 dark:hover:text-slate-205'
+                }`}
+              >
+                <span className={`transition-transform duration-300 group-hover:scale-110 ${isActive ? 'text-white' : 'text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300'}`}>
+                  {item.icon}
+                </span>
+                <span>{item.text}</span>
+                {isActive && (
+                  <div className="absolute right-3 h-1.5 w-1.5 rounded-full bg-white animate-ping" />
+                )}
+              </button>
+            );
+          })}
+        </nav>
+      </aside>
 
-        {/* Main Content Area */}
-        <Box component="main" sx={{ flexGrow: 1, p: 3, display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
-          <Toolbar />
-          <Box sx={{ flexGrow: 1 }}>
-            {activePage === 'dashboard' && <Dashboard />}
-            {activePage === 'products' && <Products />}
-            {activePage === 'masters' && <Masters />}
-            {activePage === 'purchasing' && <Purchasing />}
-            {activePage === 'inventory' && <Inventory />}
-            {activePage === 'reports' && <Reports />}
-            {activePage === 'settings' && <Settings />}
-          </Box>
-        </Box>
-      </Box>
-    </ThemeProvider>
+      {/* Main Content Pane */}
+      <main className="flex-1 pl-64 pt-16">
+        <div className="mx-auto max-w-7xl p-8 lg:p-10 animate-in">
+          {activePage === 'dashboard' && <Dashboard />}
+          {activePage === 'products' && <Products />}
+          {activePage === 'masters' && <Masters />}
+          {activePage === 'purchasing' && <Purchasing />}
+          {activePage === 'inventory' && <Inventory />}
+          {activePage === 'reports' && <Reports />}
+          {activePage === 'settings' && <Settings />}
+        </div>
+      </main>
+    </div>
   );
 }
