@@ -159,13 +159,29 @@ public static class EndpointsSetup
         // =========================================================================
         // PRODUCTS
         // =========================================================================
-        app.MapGet("/api/products", async (AppDbContext db) => 
-            await db.Products
+        app.MapGet("/api/products", async (AppDbContext db, int page = 1, int pageSize = 50, string? search = null) =>
+        {
+            var query = db.Products
                 .Include(p => p.Category)
                 .Include(p => p.Brand)
                 .Include(p => p.Unit)
                 .Include(p => p.Supplier)
-                .ToListAsync());
+                .AsNoTracking();
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                query = query.Where(p => p.Name.Contains(search) || p.SKU.Contains(search));
+            }
+
+            var totalCount = await query.CountAsync();
+            var items = await query
+                .OrderBy(p => p.Name)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return Results.Ok(new { totalCount, items, page, pageSize });
+        });
 
         app.MapPost("/api/products", async (AppDbContext db, InventoryService invService, Product product) =>
         {
@@ -300,11 +316,29 @@ public static class EndpointsSetup
         // =========================================================================
         // INVENTORY
         // =========================================================================
-        app.MapGet("/api/inventory/ledger", async (AppDbContext db) =>
-            await db.StockTransactions
+        app.MapGet("/api/inventory/ledger", async (AppDbContext db, int page = 1, int pageSize = 50, string? search = null) =>
+        {
+            var query = db.StockTransactions
                 .Include(t => t.Product)
+                .AsNoTracking();
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                query = query.Where(t => t.TransactionType.Contains(search) ||
+                                         t.Reference.Contains(search) ||
+                                         (t.Product != null && (t.Product.Name.Contains(search) || t.Product.SKU.Contains(search))));
+            }
+
+            var totalCount = await query.CountAsync();
+            var items = await query
                 .OrderByDescending(t => t.TransactionDate)
-                .ToListAsync());
+                .ThenByDescending(t => t.Id)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return Results.Ok(new { totalCount, items, page, pageSize });
+        });
 
         app.MapPost("/api/inventory/adjust", async (AppDbContext db, InventoryService invService, StockAdjustment adj) =>
         {
@@ -419,12 +453,11 @@ public static class EndpointsSetup
         // =========================================================================
         app.MapGet("/api/reports/dashboard", async (AppDbContext db) =>
         {
-            var products = await db.Products.ToListAsync();
-            var totalProducts = products.Count;
-            var currentQty = products.Sum(p => p.CurrentQuantity);
-            var currentVal = products.Sum(p => p.CurrentQuantity * p.CostPrice);
-            var lowStock = products.Count(p => p.IsActive && p.CurrentQuantity <= p.ReorderLevel && p.CurrentQuantity > 0);
-            var outOfStock = products.Count(p => p.IsActive && p.CurrentQuantity <= 0);
+            var totalProducts = await db.Products.CountAsync();
+            var totalQuantity = await db.Products.SumAsync(p => p.CurrentQuantity);
+            var totalValue = await db.Products.SumAsync(p => p.CurrentQuantity * p.CostPrice);
+            var lowStockCount = await db.Products.CountAsync(p => p.IsActive && p.CurrentQuantity <= p.ReorderLevel && p.CurrentQuantity > 0);
+            var outOfStockCount = await db.Products.CountAsync(p => p.IsActive && p.CurrentQuantity <= 0);
 
             var recentTransactions = await db.StockTransactions
                 .Include(t => t.Product)
@@ -443,10 +476,10 @@ public static class EndpointsSetup
             return Results.Ok(new
             {
                 TotalProducts = totalProducts,
-                TotalQuantity = currentQty,
-                TotalValue = currentVal,
-                LowStockCount = lowStock,
-                OutOfStockCount = outOfStock,
+                TotalQuantity = totalQuantity,
+                TotalValue = totalValue,
+                LowStockCount = lowStockCount,
+                OutOfStockCount = outOfStockCount,
                 RecentTransactions = recentTransactions
             });
         });
@@ -461,7 +494,7 @@ public static class EndpointsSetup
             {
                 title = "Current Stock Report";
                 headers = new List<string> { "SKU", "Product Name", "Category", "Current Stock", "Cost Price", "Valuation" };
-                var list = await db.Products.Include(p => p.Category).ToListAsync();
+                var list = await db.Products.Include(p => p.Category).AsNoTracking().ToListAsync();
                 rows = list.Select(p => new List<string>
                 {
                     p.SKU,
@@ -476,7 +509,7 @@ public static class EndpointsSetup
             {
                 title = "Inventory Ledger Report";
                 headers = new List<string> { "Date", "Product SKU", "Product Name", "Type", "Ref", "Qty In", "Qty Out", "Running Bal" };
-                var list = await db.StockTransactions.Include(t => t.Product).OrderBy(t => t.TransactionDate).ToListAsync();
+                var list = await db.StockTransactions.Include(t => t.Product).AsNoTracking().OrderBy(t => t.TransactionDate).ToListAsync();
                 rows = list.Select(t => new List<string>
                 {
                     t.TransactionDate.ToString("yyyy-MM-dd HH:mm"),
@@ -493,7 +526,7 @@ public static class EndpointsSetup
             {
                 title = "Inventory Valuation Report";
                 headers = new List<string> { "SKU", "Product Name", "Category", "Current Stock", "Cost Price", "Selling Price", "Cost Valuation", "Selling Valuation" };
-                var list = await db.Products.Include(p => p.Category).ToListAsync();
+                var list = await db.Products.Include(p => p.Category).AsNoTracking().ToListAsync();
                 rows = list.Select(p => new List<string>
                 {
                     p.SKU,
@@ -510,7 +543,7 @@ public static class EndpointsSetup
             {
                 title = "Low Stock Alert Report";
                 headers = new List<string> { "SKU", "Product Name", "Current Stock", "Reorder Level" };
-                var list = await db.Products.Where(p => p.CurrentQuantity <= p.ReorderLevel).ToListAsync();
+                var list = await db.Products.AsNoTracking().Where(p => p.CurrentQuantity <= p.ReorderLevel).ToListAsync();
                 rows = list.Select(p => new List<string>
                 {
                     p.SKU,
@@ -523,7 +556,7 @@ public static class EndpointsSetup
             {
                 title = "Out of Stock Report";
                 headers = new List<string> { "SKU", "Product Name", "Category", "Brand", "Cost Price", "Reorder Level" };
-                var list = await db.Products.Include(p => p.Category).Include(p => p.Brand).Where(p => p.CurrentQuantity <= 0).ToListAsync();
+                var list = await db.Products.Include(p => p.Category).Include(p => p.Brand).AsNoTracking().Where(p => p.CurrentQuantity <= 0).ToListAsync();
                 rows = list.Select(p => new List<string>
                 {
                     p.SKU,
@@ -539,9 +572,9 @@ public static class EndpointsSetup
                 title = "Dead Stock Report (No Activity 90d)";
                 headers = new List<string> { "SKU", "Product Name", "Category", "Current Stock", "Last Tx Date" };
                 var cutoff = DateTime.UtcNow.AddDays(-90);
-                var activeIds = await db.StockTransactions.Where(t => t.TransactionDate >= cutoff).Select(t => t.ProductId).Distinct().ToListAsync();
-                var list = await db.Products.Include(p => p.Category).Where(p => !activeIds.Contains(p.Id)).ToListAsync();
-                var lastTxs = await db.StockTransactions.GroupBy(t => t.ProductId).Select(g => new { ProductId = g.Key, LastDate = g.Max(t => t.TransactionDate) }).ToListAsync();
+                var activeIds = await db.StockTransactions.AsNoTracking().Where(t => t.TransactionDate >= cutoff).Select(t => t.ProductId).Distinct().ToListAsync();
+                var list = await db.Products.Include(p => p.Category).AsNoTracking().Where(p => !activeIds.Contains(p.Id)).ToListAsync();
+                var lastTxs = await db.StockTransactions.AsNoTracking().GroupBy(t => t.ProductId).Select(g => new { ProductId = g.Key, LastDate = g.Max(t => t.TransactionDate) }).ToListAsync();
                 var lastTxMap = lastTxs.ToDictionary(x => x.ProductId, x => x.LastDate);
                 rows = list.Select(p => new List<string>
                 {
@@ -558,6 +591,7 @@ public static class EndpointsSetup
                 headers = new List<string> { "SKU", "Product Name", "Category", "Current Stock", "Outgoing Qty" };
                 var cutoff = DateTime.UtcNow.AddDays(-30);
                 var outTxs = await db.StockTransactions
+                    .AsNoTracking()
                     .Where(t => t.TransactionDate >= cutoff && t.QuantityOut > 0)
                     .GroupBy(t => t.ProductId)
                     .Select(g => new { ProductId = g.Key, OutQty = g.Sum(t => t.QuantityOut) })
@@ -566,7 +600,7 @@ public static class EndpointsSetup
                     .ToListAsync();
                 var outQtyMap = outTxs.ToDictionary(x => x.ProductId, x => x.OutQty);
                 var activeIds = outTxs.Select(x => x.ProductId).ToList();
-                var list = await db.Products.Include(p => p.Category).Where(p => activeIds.Contains(p.Id)).ToListAsync();
+                var list = await db.Products.Include(p => p.Category).AsNoTracking().Where(p => activeIds.Contains(p.Id)).ToListAsync();
                 rows = list
                     .Select(p => new { Product = p, Qty = outQtyMap.GetValueOrDefault(p.Id, 0) })
                     .OrderByDescending(x => x.Qty)
@@ -585,12 +619,13 @@ public static class EndpointsSetup
                 headers = new List<string> { "SKU", "Product Name", "Category", "Current Stock", "Outgoing Qty" };
                 var cutoff = DateTime.UtcNow.AddDays(-30);
                 var outTxs = await db.StockTransactions
+                    .AsNoTracking()
                     .Where(t => t.TransactionDate >= cutoff && t.QuantityOut > 0)
                     .GroupBy(t => t.ProductId)
                     .Select(g => new { ProductId = g.Key, OutQty = g.Sum(t => t.QuantityOut) })
                     .ToListAsync();
                 var outQtyMap = outTxs.ToDictionary(x => x.ProductId, x => x.OutQty);
-                var list = await db.Products.Include(p => p.Category).Where(p => p.IsActive).ToListAsync();
+                var list = await db.Products.Include(p => p.Category).AsNoTracking().Where(p => p.IsActive).ToListAsync();
                 rows = list
                     .Select(p => new { Product = p, Qty = outQtyMap.GetValueOrDefault(p.Id, 0) })
                     .Where(x => x.Qty < 5)
@@ -608,9 +643,9 @@ public static class EndpointsSetup
             {
                 title = "Supplier Performance Report";
                 headers = new List<string> { "Supplier Name", "Contact", "Phone", "Email", "Total Products", "Purchase Orders" };
-                var prodCounts = await db.Products.GroupBy(p => p.SupplierId).Select(g => new { SupplierId = g.Key, Count = g.Count() }).ToDictionaryAsync(x => x.SupplierId, x => x.Count);
-                var poCounts = await db.PurchaseOrders.GroupBy(po => po.SupplierId).Select(g => new { SupplierId = g.Key, Count = g.Count() }).ToDictionaryAsync(x => x.SupplierId, x => x.Count);
-                var list = await db.Suppliers.ToListAsync();
+                var prodCounts = await db.Products.AsNoTracking().GroupBy(p => p.SupplierId).Select(g => new { SupplierId = g.Key, Count = g.Count() }).ToDictionaryAsync(x => x.SupplierId, x => x.Count);
+                var poCounts = await db.PurchaseOrders.AsNoTracking().GroupBy(po => po.SupplierId).Select(g => new { SupplierId = g.Key, Count = g.Count() }).ToDictionaryAsync(x => x.SupplierId, x => x.Count);
+                var list = await db.Suppliers.AsNoTracking().ToListAsync();
                 rows = list.Select(s => new List<string>
                 {
                     s.Name,
@@ -625,7 +660,7 @@ public static class EndpointsSetup
             {
                 title = "Purchase Orders Summary Report";
                 headers = new List<string> { "PO Number", "Supplier", "Date", "Status", "Items Count", "Total Cost" };
-                var list = await db.PurchaseOrders.Include(po => po.Supplier).Include(po => po.Items).ToListAsync();
+                var list = await db.PurchaseOrders.Include(po => po.Supplier).Include(po => po.Items).AsNoTracking().ToListAsync();
                 rows = list.Select(po => new List<string>
                 {
                     po.OrderNumber ?? "",

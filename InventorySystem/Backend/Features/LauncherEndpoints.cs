@@ -163,7 +163,6 @@ public static class LauncherEndpoints
         // Simple check for sensitive system directories
         var sensitivePaths = new[]
         {
-            Path.GetPathRoot(Environment.SystemDirectory), // e.g. C:\
             Environment.GetFolderPath(Environment.SpecialFolder.Windows),
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),

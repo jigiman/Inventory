@@ -9,6 +9,7 @@ import { Select } from '../components/ui/Select';
 
 export default function Inventory() {
   const [ledger, setLedger] = useState<StockTransaction[]>([]);
+  const [totalLedger, setTotalLedger] = useState(0);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -22,7 +23,7 @@ export default function Inventory() {
   const [sortField, setSortField] = useState<string>('transactionDate');
   const [sortAsc, setSortAsc] = useState<boolean>(false); // default descending to show newest first
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const itemsPerPage = 12;
+  const itemsPerPage = 50;
 
   // Form states
   const [adjustForm, setAdjustForm] = useState<StockAdjustment>({
@@ -36,12 +37,13 @@ export default function Inventory() {
     setLoading(true);
     setError('');
     try {
-      const [txs, prods] = await Promise.all([
-        api.getLedger(),
-        api.getProducts()
+      const [ledgerResult, prodsResult] = await Promise.all([
+        api.getLedger(currentPage, itemsPerPage, searchTerm),
+        api.getProducts(1, 1000) // Get more products for dropdowns, but ideally this should also be paginated/searchable in UI
       ]);
-      setLedger(txs);
-      setProducts(prods);
+      setLedger(ledgerResult.items);
+      setTotalLedger(ledgerResult.totalCount);
+      setProducts(prodsResult.items);
     } catch (err: any) {
       setError(err.message || 'Failed to load inventory data');
     } finally {
@@ -51,7 +53,7 @@ export default function Inventory() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [currentPage, searchTerm]);
 
   const handleOpenAdjust = () => {
     setAdjustForm({
@@ -121,23 +123,11 @@ export default function Inventory() {
     setCurrentPage(1);
   };
 
-  // Compute filtered & sorted ledger list
-  const filteredSortedLedger = useMemo(() => {
+  // Compute sorted ledger list (filtering is now done server-side)
+  const sortedLedger = useMemo(() => {
     let result = [...ledger];
 
-    // 1. Filter
-    if (searchTerm) {
-      const lower = searchTerm.toLowerCase();
-      result = result.filter(
-        (tx) =>
-          tx.transactionType.toLowerCase().includes(lower) ||
-          (tx.reference && tx.reference.toLowerCase().includes(lower)) ||
-          (tx.product?.name && tx.product.name.toLowerCase().includes(lower)) ||
-          (tx.product?.sku && tx.product.sku.toLowerCase().includes(lower))
-      );
-    }
-
-    // 2. Sort
+    // 1. Sort
     result.sort((a: any, b: any) => {
       let valA: any = a[sortField];
       let valB: any = b[sortField];
@@ -163,12 +153,9 @@ export default function Inventory() {
   }, [ledger, searchTerm, sortField, sortAsc]);
 
   // Pagination computations
-  const totalItems = filteredSortedLedger.length;
+  const totalItems = totalLedger;
   const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
-  const paginatedLedger = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage;
-    return filteredSortedLedger.slice(start, start + itemsPerPage);
-  }, [filteredSortedLedger, currentPage]);
+  const paginatedLedger = sortedLedger;
 
   const startRange = totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
   const endRange = Math.min(currentPage * itemsPerPage, totalItems);

@@ -57,6 +57,13 @@ export interface Supplier {
   notes: string;
 }
 
+export interface PaginatedResult<T> {
+  totalCount: number;
+  items: T[];
+  page: number;
+  pageSize: number;
+}
+
 export interface Product {
   id?: number;
   sku: string;
@@ -180,7 +187,11 @@ export const api = {
   deleteSupplier: (id: number) => request<void>(`/api/suppliers/${id}`, { method: 'DELETE' }),
 
   // Products
-  getProducts: () => request<Product[]>('/api/products'),
+  getProducts: (page = 1, pageSize = 50, search?: string) => {
+    let url = `/api/products?page=${page}&pageSize=${pageSize}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+    return request<PaginatedResult<Product>>(url);
+  },
   createProduct: (product: Product) => request<Product>('/api/products', { method: 'POST', body: JSON.stringify(product) }),
   updateProduct: (id: number, product: Product) => request<Product>(`/api/products/${id}`, { method: 'PUT', body: JSON.stringify(product) }),
   deleteProduct: (id: number) => request<void>(`/api/products/${id}`, { method: 'DELETE' }),
@@ -192,7 +203,11 @@ export const api = {
     request<PurchaseOrder>(`/api/purchase-orders/${id}/receive`, { method: 'POST', body: JSON.stringify(items) }),
 
   // Inventory
-  getLedger: () => request<StockTransaction[]>('/api/inventory/ledger'),
+  getLedger: (page = 1, pageSize = 50, search?: string) => {
+    let url = `/api/inventory/ledger?page=${page}&pageSize=${pageSize}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+    return request<PaginatedResult<StockTransaction>>(url);
+  },
   adjustStock: (adj: StockAdjustment) => request<StockAdjustment>('/api/inventory/adjust', { method: 'POST', body: JSON.stringify(adj) }),
   countStock: (count: StockCount) => request<StockCount>('/api/inventory/count', { method: 'POST', body: JSON.stringify(count) }),
 

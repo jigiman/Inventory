@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="Backend/Backend.csproj" />
   <Project Path="Desktop/Desktop.csproj" />
+  <Project Path="Performance.Tests/Performance.Tests.csproj" />
   <Project Path="Security.Tests/Security.Tests.csproj" />
 </Solution>
