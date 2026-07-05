@@ -11,6 +11,7 @@ import { Switch } from '../components/ui/Switch';
 
 export default function Products() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [totalProducts, setTotalProducts] = useState(0);
   const [categories, setCategories] = useState<Category[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
@@ -30,7 +31,7 @@ export default function Products() {
   const [sortField, setSortField] = useState<string>('name');
   const [sortAsc, setSortAsc] = useState<boolean>(true);
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const itemsPerPage = 12;
+  const itemsPerPage = 50;
 
   const [formProduct, setFormProduct] = useState<Product>({
     sku: '', name: '', description: '',
@@ -46,14 +47,15 @@ export default function Products() {
     setLoading(true);
     setError('');
     try {
-      const [prods, cats, brs, uns, sups] = await Promise.all([
-        api.getProducts(),
+      const [prodsResult, cats, brs, uns, sups] = await Promise.all([
+        api.getProducts(currentPage, itemsPerPage, searchTerm),
         api.getCategories(),
         api.getBrands(),
         api.getUnits(),
         api.getSuppliers(),
       ]);
-      setProducts(prods);
+      setProducts(prodsResult.items);
+      setTotalProducts(prodsResult.totalCount);
       setCategories(cats);
       setBrands(brs);
       setUnits(uns);
@@ -67,7 +69,7 @@ export default function Products() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [currentPage, searchTerm]);
 
   const handleOpenAdd = () => {
     setEditId(null);
@@ -133,24 +135,11 @@ export default function Products() {
     setCurrentPage(1);
   };
 
-  // Compute filtered & sorted list
-  const filteredSortedProducts = useMemo(() => {
+  // Compute sorted list (filtering is now done server-side)
+  const sortedProducts = useMemo(() => {
     let result = [...products];
 
-    // 1. Filter
-    if (searchTerm) {
-      const lower = searchTerm.toLowerCase();
-      result = result.filter(
-        (p) =>
-          p.name.toLowerCase().includes(lower) ||
-          p.sku.toLowerCase().includes(lower) ||
-          (p.category?.name && p.category.name.toLowerCase().includes(lower)) ||
-          (p.brand?.name && p.brand.name.toLowerCase().includes(lower)) ||
-          (p.shelfLocation && p.shelfLocation.toLowerCase().includes(lower))
-      );
-    }
-
-    // 2. Sort
+    // 1. Sort
     result.sort((a: any, b: any) => {
       let valA: any = a[sortField];
       let valB: any = b[sortField];
@@ -173,15 +162,12 @@ export default function Products() {
     });
 
     return result;
-  }, [products, searchTerm, sortField, sortAsc]);
+  }, [products, sortField, sortAsc]);
 
   // Pagination computations
-  const totalItems = filteredSortedProducts.length;
+  const totalItems = totalProducts;
   const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
-  const paginatedProducts = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage;
-    return filteredSortedProducts.slice(start, start + itemsPerPage);
-  }, [filteredSortedProducts, currentPage]);
+  const paginatedProducts = sortedProducts;
 
   const startRange = totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
   const endRange = Math.min(currentPage * itemsPerPage, totalItems);

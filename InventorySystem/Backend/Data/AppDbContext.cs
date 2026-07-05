@@ -49,6 +49,20 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<StockTransaction>()
             .HasIndex(t => t.ProductId);
 
+        // PurchaseOrder indexes
+        modelBuilder.Entity<PurchaseOrder>()
+            .HasIndex(po => po.OrderDate);
+
+        modelBuilder.Entity<PurchaseOrder>()
+            .HasIndex(po => po.SupplierId);
+
+        // StockAdjustment indexes
+        modelBuilder.Entity<StockAdjustment>()
+            .HasIndex(sa => sa.CreatedDate);
+
+        modelBuilder.Entity<StockAdjustment>()
+            .HasIndex(sa => sa.ProductId);
+
         // Settings constraints
         modelBuilder.Entity<Setting>()
             .HasIndex(s => s.Key)
