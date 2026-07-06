@@ -8,14 +8,30 @@ const API_BASE = window.location.origin.includes('localhost:5173')
   ? (localStorage.getItem('backend_url') || 'http://127.0.0.1:5000')
   : window.location.origin;
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
+let sessionToken = sessionStorage.getItem('session_token') || '';
+
+export function setSessionToken(token: string) {
+  sessionToken = token;
+  if (token) {
+    sessionStorage.setItem('session_token', token);
+  } else {
+    sessionStorage.removeItem('session_token');
+  }
+}
+
+async function requestRaw<T>(path: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE}${path}`;
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...options?.headers,
+  };
+  if (sessionToken) {
+    headers['Authorization'] = `Bearer ${sessionToken}`;
+  }
+
   const response = await fetch(url, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
+    headers,
   });
 
   if (!response.ok) {
@@ -28,6 +44,42 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   }
 
   return response.json();
+}
+
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+}
+
+const memoryCache = new Map<string, CacheEntry<any>>();
+const CACHE_TTL = 30000; // 30 seconds
+
+export function clearCache() {
+  memoryCache.clear();
+}
+
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const isGet = !options || !options.method || options.method.toUpperCase() === 'GET';
+  
+  // Skip caching launcher configuration checks
+  const isLauncher = path.startsWith('/api/launcher');
+  
+  if (!isGet || isLauncher) {
+    if (!isGet) {
+      clearCache();
+    }
+    return requestRaw<T>(path, options);
+  }
+
+  const cacheKey = path;
+  const cached = memoryCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return Promise.resolve(cached.data);
+  }
+
+  const data = await requestRaw<T>(path, options);
+  memoryCache.set(cacheKey, { data, timestamp: Date.now() });
+  return data;
 }
 
 export interface Category {
@@ -249,11 +301,12 @@ export const api = {
     status: 'NOT_INITIALIZED' | 'READY';
     recentDatabases: { name: string; path: string; lastOpened: string }[];
     theme: 'light' | 'dark';
+    sessionToken?: string;
   }>('/api/launcher'),
-  openDatabase: (dbPath: string, password?: string) => request<{ status: string; dbPath: string }>('/api/launcher/open', {
+  openDatabase: (dbPath: string, password?: string) => request<{ status: string; dbPath: string; sessionToken: string }>('/api/launcher/open', {
     method: 'POST', body: JSON.stringify({ dbPath, password }),
   }),
-  createDatabase: (dbPath: string, name?: string, password?: string) => request<{ status: string; dbPath: string; name: string }>('/api/launcher/new', {
+  createDatabase: (dbPath: string, name?: string, password?: string) => request<{ status: string; dbPath: string; name: string; sessionToken: string }>('/api/launcher/new', {
     method: 'POST', body: JSON.stringify({ dbPath, name, password }),
   }),
   saveTheme: (theme: 'light' | 'dark') => request<{ theme: 'light' | 'dark' }>('/api/launcher/theme', {
@@ -434,5 +487,5 @@ export const api = {
   }>('/api/reports/dashboard'),
 
   // Export URLs helper
-  getExportUrl: (type: string, format: string) => `${API_BASE}/api/reports/export?type=${type}&format=${format}`,
+  getExportUrl: (type: string, format: string) => `${API_BASE}/api/reports/export?type=${type}&format=${format}&token=${encodeURIComponent(sessionToken)}`,
 };

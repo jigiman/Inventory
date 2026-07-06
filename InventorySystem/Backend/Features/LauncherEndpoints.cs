@@ -25,7 +25,8 @@ public static class LauncherEndpoints
             {
                 status = state.IsInitialized ? "READY" : "NOT_INITIALIZED",
                 recentDatabases = config.RecentDatabases,
-                theme = config.Theme
+                theme = config.Theme,
+                sessionToken = state.SessionToken
             });
         });
 
@@ -78,9 +79,12 @@ public static class LauncherEndpoints
             {
                 dbState.DbPath = null;
                 dbState.Password = null;
+                dbState.SessionToken = null;
                 Log.Error(ex, "Failed to open database: {Path}", path);
                 return Results.Problem($"Failed to open database: {ex.Message}");
             }
+
+            dbState.SessionToken = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
 
             // Save the credential if it was successfully unlocked and a password was used
             if (!string.IsNullOrEmpty(password))
@@ -93,7 +97,7 @@ public static class LauncherEndpoints
             config.Touch(name, path);
 
             Log.Information("Opened database: {Path}", path);
-            return Results.Ok(new { status = "READY", dbPath = path });
+            return Results.Ok(new { status = "READY", dbPath = path, sessionToken = dbState.SessionToken });
         });
 
         // ── POST /api/launcher/new ────────────────────────────────────────────
@@ -142,9 +146,12 @@ public static class LauncherEndpoints
             {
                 dbState.DbPath = null;
                 dbState.Password = null;
+                dbState.SessionToken = null;
                 Log.Error(ex, "Failed to create database: {Path}", path);
                 return Results.Problem($"Failed to create database: {ex.Message}");
             }
+
+            dbState.SessionToken = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
 
             // Save the credential if database is successfully created with a password
             if (!string.IsNullOrEmpty(req.Password))
@@ -156,7 +163,7 @@ public static class LauncherEndpoints
             config.Touch(name, path);
 
             Log.Information("Created new database '{Name}' at {Path}", name, path);
-            return Results.Ok(new { status = "READY", dbPath = path, name });
+            return Results.Ok(new { status = "READY", dbPath = path, name, sessionToken = dbState.SessionToken });
         });
     }
 
@@ -166,6 +173,18 @@ public static class LauncherEndpoints
     {
         error = "";
         fullPath = "";
+
+        if (string.IsNullOrWhiteSpace(rawPath))
+        {
+            error = "Path cannot be empty.";
+            return false;
+        }
+
+        if (rawPath.Contains('\0') || rawPath.Contains(".."))
+        {
+            error = "Directory traversal or invalid characters detected.";
+            return false;
+        }
 
         try
         {

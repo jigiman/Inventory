@@ -121,6 +121,26 @@ public class Program
                     });
                     return;
                 }
+
+                // Enforce Session Token verification for local API protection
+                var authHeader = context.Request.Headers["Authorization"].FirstOrDefault();
+                var token = authHeader?.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) == true
+                    ? authHeader.Substring(7)
+                    : context.Request.Query["token"].FirstOrDefault();
+
+                var expectedToken = state.SessionToken;
+                if (string.IsNullOrEmpty(expectedToken) || 
+                    string.IsNullOrEmpty(token) || 
+                    token != expectedToken)
+                {
+                    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                    await context.Response.WriteAsJsonAsync(new
+                    {
+                        error = "UNAUTHORIZED",
+                        message = "Invalid or missing session authorization token."
+                    });
+                    return;
+                }
             }
 
             await next(context);

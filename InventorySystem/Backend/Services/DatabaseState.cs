@@ -16,6 +16,9 @@ public class DatabaseState
     private byte[]? _encryptedPassword;
     private byte[]? _salt;
 
+    /// <summary>Runtime-generated session token to authorize local API requests.</summary>
+    public string? SessionToken { get; set; }
+
     /// <summary>Full file path to the active SQLite database.</summary>
     public string? DbPath
     {
@@ -25,6 +28,10 @@ public class DatabaseState
             _dbPath = value;
             IsInitialized = value is not null;
             _salt = null; // Reset salt cache so it re-evaluates for the new path
+            if (value is null)
+            {
+                SessionToken = null;
+            }
         }
     }
 
@@ -47,7 +54,9 @@ public class DatabaseState
 
             var builder = new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
             {
-                DataSource = _dbPath
+                DataSource = _dbPath,
+                // Add busy timeout of 5 seconds to connection string by default
+                DefaultTimeout = 5
             };
 
             var rawPassword = Password;
@@ -71,13 +80,34 @@ public class DatabaseState
         if (string.IsNullOrEmpty(_dbPath))
             throw new InvalidOperationException("DbPath must be set before generating or retrieving a salt.");
 
+        // 1. Try to load from Credential Manager (Secure OS storage)
+        try
+        {
+            var savedSaltHex = CredentialManager.GetCredential(_dbPath + ":salt");
+            if (!string.IsNullOrEmpty(savedSaltHex))
+            {
+                _salt = Convert.FromHexString(savedSaltHex);
+                if (_salt.Length == 16) return _salt;
+            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "Failed to retrieve salt from secure credential storage.");
+        }
+
+        // 2. Fallback to sidecar file for backward compatibility
         var saltPath = _dbPath + ".salt";
         if (File.Exists(saltPath))
         {
             try
             {
                 _salt = File.ReadAllBytes(saltPath);
-                if (_salt.Length == 16) return _salt;
+                if (_salt.Length == 16)
+                {
+                    // Migrate to Credential Manager if possible
+                    CredentialManager.SaveCredential(_dbPath + ":salt", Convert.ToHexString(_salt));
+                    return _salt;
+                }
             }
             catch (Exception ex)
             {
@@ -85,10 +115,11 @@ public class DatabaseState
             }
         }
 
-        // Generate new salt
+        // 3. Generate new salt
         _salt = RandomNumberGenerator.GetBytes(16);
         try
         {
+            CredentialManager.SaveCredential(_dbPath + ":salt", Convert.ToHexString(_salt));
             File.WriteAllBytes(saltPath, _salt);
         }
         catch (Exception ex)

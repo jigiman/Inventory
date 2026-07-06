@@ -139,12 +139,20 @@ public class BackupService
         if (!File.Exists(backupPath))
             throw new FileNotFoundException("Backup file not found", backupPath);
 
+        // 1. Dry-run validate the backup file first before touching active database
+        var password = _dbState.Password;
+        await ValidateBackupFileAsync(backupPath, password);
+
         var tempZipPath = Path.Combine(appDataPath, "Backups", $"temp_restore_{Guid.NewGuid()}.zip");
+        var tempFolder = Path.Combine(appDataPath, "Backups", $"temp_workspace_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempFolder);
+
+        var tempDbPath = Path.Combine(tempFolder, "database.db");
+        var tempSaltPath = Path.Combine(tempFolder, "database.db.salt");
         var isEncrypted = backupFileName.EndsWith(".bak", StringComparison.OrdinalIgnoreCase);
 
         if (isEncrypted)
         {
-            var password = _dbState.Password;
             if (string.IsNullOrEmpty(password))
                 throw new InvalidOperationException("Cannot decrypt backup. Database password is not set.");
 
@@ -157,29 +165,75 @@ public class BackupService
 
         try
         {
-            // Close connection and copy over dbPath
+            using (var fs = new FileStream(tempZipPath, FileMode.Open))
+            using (var archive = new ZipArchive(fs, ZipArchiveMode.Read))
+            {
+                // Extract to temp folder
+                var dbEntry = archive.GetEntry("database.db");
+                if (dbEntry != null)
+                {
+                    dbEntry.ExtractToFile(tempDbPath, overwrite: true);
+                }
+
+                var saltEntry = archive.GetEntry("database.db.salt");
+                if (saltEntry != null)
+                {
+                    saltEntry.ExtractToFile(tempSaltPath, overwrite: true);
+                }
+            }
+
+            // Close connection and copy over dbPath safely
             await _context.Database.CloseConnectionAsync();
             GC.Collect();
             GC.WaitForPendingFinalizers();
 
+            var activeBackupDb = dbPath + ".bak_old";
+            var activeBackupSalt = dbPath + ".salt.bak_old";
+
+            if (File.Exists(activeBackupDb)) File.Delete(activeBackupDb);
+            if (File.Exists(activeBackupSalt)) File.Delete(activeBackupSalt);
+
+            try
+            {
+                // Rename active DB out of the way
+                if (File.Exists(dbPath))
+                    File.Move(dbPath, activeBackupDb);
+
+                var saltPath = dbPath + ".salt";
+                if (File.Exists(saltPath))
+                    File.Move(saltPath, activeBackupSalt);
+
+                // Move restored DB into place
+                File.Move(tempDbPath, dbPath);
+                if (File.Exists(tempSaltPath))
+                    File.Move(tempSaltPath, saltPath);
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Error(ex, "Failed to swap restored database files atomically. Rolling back to original.");
+                if (File.Exists(activeBackupDb))
+                {
+                    if (File.Exists(dbPath)) File.Delete(dbPath);
+                    File.Move(activeBackupDb, dbPath);
+                }
+                var saltPath = dbPath + ".salt";
+                if (File.Exists(activeBackupSalt))
+                {
+                    if (File.Exists(saltPath)) File.Delete(saltPath);
+                    File.Move(activeBackupSalt, saltPath);
+                }
+                throw new InvalidOperationException("Atomic database restore swap failed, original database remains active.", ex);
+            }
+            finally
+            {
+                if (File.Exists(activeBackupDb)) File.Delete(activeBackupDb);
+                if (File.Exists(activeBackupSalt)) File.Delete(activeBackupSalt);
+            }
+
+            // Extract images
             using (var fs = new FileStream(tempZipPath, FileMode.Open))
             using (var archive = new ZipArchive(fs, ZipArchiveMode.Read))
             {
-                // Extract database
-                var dbEntry = archive.GetEntry("database.db");
-                if (dbEntry != null)
-                {
-                    dbEntry.ExtractToFile(dbPath, overwrite: true);
-                }
-
-                // Extract salt
-                var saltEntry = archive.GetEntry("database.db.salt");
-                if (saltEntry != null)
-                {
-                    saltEntry.ExtractToFile(dbPath + ".salt", overwrite: true);
-                }
-
-                // Extract images
                 foreach (var entry in archive.Entries)
                 {
                     if (entry.FullName.StartsWith("Images/", StringComparison.OrdinalIgnoreCase))
@@ -198,6 +252,8 @@ public class BackupService
         {
             if (File.Exists(tempZipPath))
                 File.Delete(tempZipPath);
+            if (Directory.Exists(tempFolder))
+                Directory.Delete(tempFolder, recursive: true);
         }
     }
 

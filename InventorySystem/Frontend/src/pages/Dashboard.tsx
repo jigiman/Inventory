@@ -24,11 +24,11 @@ interface DashboardStats {
     transactionType: string;
     quantity: number;
   }[];
+  valuationByCategory?: { categoryName: string; valuation: number }[];
 }
 
 export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
@@ -37,12 +37,8 @@ export default function Dashboard() {
   useEffect(() => {
     async function loadData() {
       try {
-        const [dashData, prodData] = await Promise.all([
-          api.getDashboardData(),
-          api.getProducts()
-        ]);
+        const dashData = await api.getDashboardData();
         setStats(dashData);
-        setProducts(prodData.items);
       } catch (err: any) {
         setError(err.message || 'Failed to fetch dashboard data');
       } finally {
@@ -53,19 +49,11 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    if (!chartRef.current || loading || error || !products.length) return;
+    if (!chartRef.current || loading || error || !stats || !stats.valuationByCategory?.length) return;
 
-    // Calculate valuation by category
-    const valuationMap: { [key: string]: number } = {};
-    products.forEach((p) => {
-      const catName = p.category?.name || 'Uncategorized';
-      const val = p.currentQuantity * p.costPrice;
-      valuationMap[catName] = (valuationMap[catName] || 0) + val;
-    });
-
-    const chartData = Object.keys(valuationMap).map((name) => ({
-      name,
-      value: parseFloat(valuationMap[name].toFixed(2)),
+    const chartData = stats.valuationByCategory.map((x) => ({
+      name: x.categoryName,
+      value: parseFloat(x.valuation.toFixed(2)),
     }));
 
     const isDark = document.documentElement.classList.contains('dark');

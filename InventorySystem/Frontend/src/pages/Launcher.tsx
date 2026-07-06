@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { FolderOpen, Plus, Database, Clock, ChevronRight, AlertCircle, Loader2, Package, Sun, Moon } from 'lucide-react';
-import { api } from '../api';
+import { api, setSessionToken } from '../api';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { pickOpenFile, pickSaveFile, isPhotino } from '../utils/photino';
@@ -54,7 +54,10 @@ export default function Launcher({ recentDatabases, onReady, theme, onThemeChang
     setLoading(true);
     setError('');
     try {
-      await api.openDatabase(path.trim(), password);
+      const res = await api.openDatabase(path.trim(), password);
+      if (res.sessionToken) {
+        setSessionToken(res.sessionToken);
+      }
       onReady();
     } catch (e: any) {
       const msg = e.message || '';
@@ -87,7 +90,10 @@ export default function Launcher({ recentDatabases, onReady, theme, onThemeChang
     setLoading(true);
     setError('');
     try {
-      await api.createDatabase(newPath.trim(), newName.trim() || undefined, newPassword.trim() || undefined);
+      const res = await api.createDatabase(newPath.trim(), newName.trim() || undefined, newPassword.trim() || undefined);
+      if (res.sessionToken) {
+        setSessionToken(res.sessionToken);
+      }
       onReady();
     } catch (e: any) {
       setError(e.message || 'Failed to create database.');

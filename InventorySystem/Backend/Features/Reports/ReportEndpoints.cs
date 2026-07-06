@@ -18,30 +18,85 @@ public static class ReportEndpoints
     {
         app.MapGet("/api/reports/dashboard", async (AppDbContext db) =>
         {
-            var totalProducts = await db.Products.CountAsync();
-            var totalQuantity = await db.Products.SumAsync(p => p.CurrentQuantity);
-            var totalValue = await db.Products.SumAsync(p => p.CurrentQuantity * p.CostPrice);
-            var lowStockCount = await db.Products.CountAsync(p => p.IsActive && p.CurrentQuantity <= p.ReorderLevel && p.CurrentQuantity > 0);
-            var outOfStockCount = await db.Products.CountAsync(p => p.IsActive && p.CurrentQuantity <= 0);
-
-            // Debtor/Creditor KPIs - Sum of all positive outstanding balances
-            var debtorBalances = await db.Customers
-                .Select(c => new {
-                    SalesTotal = db.Sales.Where(s => s.CustomerId == c.Id).Sum(s => s.TotalAmount),
-                    ReturnsTotal = db.SalesReturns.Where(r => r.CustomerId == c.Id).Sum(r => r.TotalAmount),
-                    PaymentsTotal = db.Payments.Where(p => p.CustomerId == c.Id).Sum(p => p.IsRefund ? -p.Amount : p.Amount)
+            var productStats = await db.Products
+                .GroupBy(p => 1)
+                .Select(g => new
+                {
+                    TotalProducts = g.Count(),
+                    TotalQuantity = g.Sum(p => p.CurrentQuantity),
+                    TotalValue = g.Sum(p => p.CurrentQuantity * p.CostPrice),
+                    LowStockCount = g.Count(p => p.IsActive && p.CurrentQuantity <= p.ReorderLevel && p.CurrentQuantity > 0),
+                    OutOfStockCount = g.Count(p => p.IsActive && p.CurrentQuantity <= 0)
                 })
-                .ToListAsync();
-            var totalDebtors = debtorBalances.Sum(x => Math.Max(0, x.SalesTotal - x.ReturnsTotal - x.PaymentsTotal));
+                .FirstOrDefaultAsync();
 
-            var creditorBalances = await db.Suppliers
-                .Select(s => new {
-                    PurchasesTotal = db.PurchaseOrders.Where(po => po.SupplierId == s.Id).Sum(po => po.TotalAmount),
-                    ReturnsTotal = db.PurchaseReturns.Where(r => r.SupplierId == s.Id).Sum(r => r.TotalAmount),
-                    PaymentsTotal = db.Payments.Where(p => p.SupplierId == s.Id).Sum(p => p.IsRefund ? -p.Amount : p.Amount)
-                })
-                .ToListAsync();
-            var totalCreditors = creditorBalances.Sum(x => Math.Max(0, x.PurchasesTotal - x.ReturnsTotal - x.PaymentsTotal));
+            var totalProducts = productStats?.TotalProducts ?? 0;
+            var totalQuantity = productStats?.TotalQuantity ?? 0;
+            var totalValue = productStats?.TotalValue ?? 0;
+            var lowStockCount = productStats?.LowStockCount ?? 0;
+            var outOfStockCount = productStats?.OutOfStockCount ?? 0;
+
+            // Debtor KPIs - Sum of all positive outstanding balances
+            var salesGroup = await db.Sales
+                .GroupBy(s => s.CustomerId)
+                .Select(g => new { CustomerId = g.Key, Total = g.Sum(s => s.TotalAmount) })
+                .ToDictionaryAsync(x => x.CustomerId, x => x.Total);
+
+            var returnsGroup = await db.SalesReturns
+                .GroupBy(r => r.CustomerId)
+                .Select(g => new { CustomerId = g.Key, Total = g.Sum(r => r.TotalAmount) })
+                .ToDictionaryAsync(x => x.CustomerId, x => x.Total);
+
+            var paymentsGroup = await db.Payments
+                .Where(p => p.CustomerId != null)
+                .GroupBy(p => p.CustomerId!.Value)
+                .Select(g => new { CustomerId = g.Key, Total = g.Sum(p => p.IsRefund ? -p.Amount : p.Amount) })
+                .ToDictionaryAsync(x => x.CustomerId, x => x.Total);
+
+            var customerIds = await db.Customers.Select(c => c.Id).ToListAsync();
+            decimal totalDebtors = 0;
+            foreach (var cid in customerIds)
+            {
+                var sales = salesGroup.GetValueOrDefault(cid, 0);
+                var returns = returnsGroup.GetValueOrDefault(cid, 0);
+                var paid = paymentsGroup.GetValueOrDefault(cid, 0);
+                var balance = sales - returns - paid;
+                if (balance > 0)
+                {
+                    totalDebtors += balance;
+                }
+            }
+
+            // Creditor KPIs - Sum of all positive outstanding balances
+            var purchasesGroup = await db.PurchaseOrders
+                .GroupBy(po => po.SupplierId)
+                .Select(g => new { SupplierId = g.Key, Total = g.Sum(po => po.TotalAmount) })
+                .ToDictionaryAsync(x => x.SupplierId, x => x.Total);
+
+            var purchaseReturnsGroup = await db.PurchaseReturns
+                .GroupBy(pr => pr.SupplierId)
+                .Select(g => new { SupplierId = g.Key, Total = g.Sum(pr => pr.TotalAmount) })
+                .ToDictionaryAsync(x => x.SupplierId, x => x.Total);
+
+            var supplierPaymentsGroup = await db.Payments
+                .Where(p => p.SupplierId != null)
+                .GroupBy(p => p.SupplierId!.Value)
+                .Select(g => new { SupplierId = g.Key, Total = g.Sum(p => p.IsRefund ? -p.Amount : p.Amount) })
+                .ToDictionaryAsync(x => x.SupplierId, x => x.Total);
+
+            var supplierIds = await db.Suppliers.Select(s => s.Id).ToListAsync();
+            decimal totalCreditors = 0;
+            foreach (var sid in supplierIds)
+            {
+                var purchases = purchasesGroup.GetValueOrDefault(sid, 0);
+                var returns = purchaseReturnsGroup.GetValueOrDefault(sid, 0);
+                var paid = supplierPaymentsGroup.GetValueOrDefault(sid, 0);
+                var balance = purchases - returns - paid;
+                if (balance > 0)
+                {
+                    totalCreditors += balance;
+                }
+            }
 
             var recentTransactions = await db.StockTransactions
                 .Include(t => t.Product)
@@ -57,6 +112,12 @@ public static class ReportEndpoints
                 })
                 .ToListAsync();
 
+            var valuationByCategory = await db.Products
+                .Include(p => p.Category)
+                .GroupBy(p => p.Category != null ? p.Category.Name : "Uncategorized")
+                .Select(g => new { CategoryName = g.Key, Valuation = g.Sum(p => p.CurrentQuantity * p.CostPrice) })
+                .ToListAsync();
+
             return Results.Ok(new
             {
                 TotalProducts = totalProducts,
@@ -66,7 +127,8 @@ public static class ReportEndpoints
                 OutOfStockCount = outOfStockCount,
                 TotalDebtors = totalDebtors,
                 TotalCreditors = totalCreditors,
-                RecentTransactions = recentTransactions
+                RecentTransactions = recentTransactions,
+                ValuationByCategory = valuationByCategory
             });
         });
 
@@ -75,11 +137,34 @@ public static class ReportEndpoints
             List<string> headers = new();
             List<List<string>> rows = new();
             string title = "Report";
+            bool isCsv = format.Equals("csv", StringComparison.OrdinalIgnoreCase);
 
             if (type == "CurrentStock")
             {
                 title = "Current Stock Report";
                 headers = new List<string> { "SKU", "Product Name", "Category", "Current Stock", "Cost Price", "Valuation" };
+                if (isCsv)
+                {
+                    return Results.Stream(async outputStream =>
+                    {
+                        using var writer = new StreamWriter(outputStream, System.Text.Encoding.UTF8, leaveOpen: true);
+                        await writer.WriteLineAsync(string.Join(",", headers.Select(h => $"\"{h.Replace("\"", "\"\"")}\"")));
+                        await foreach (var p in db.Products.Include(p => p.Category).AsNoTracking().AsAsyncEnumerable())
+                        {
+                            var row = new List<string>
+                            {
+                                p.SKU,
+                                p.Name,
+                                p.Category?.Name ?? "",
+                                p.CurrentQuantity.ToString("0.##"),
+                                p.CostPrice.ToString("F2"),
+                                (p.CurrentQuantity * p.CostPrice).ToString("F2")
+                            };
+                            await writer.WriteLineAsync(string.Join(",", row.Select(cell => $"\"{cell?.Replace("\"", "\"\"") ?? ""}\"")));
+                        }
+                    }, "text/csv", $"CurrentStock_{DateTime.UtcNow:yyyyMMdd}.csv");
+                }
+
                 var list = await db.Products.Include(p => p.Category).AsNoTracking().ToListAsync();
                 rows = list.Select(p => new List<string>
                 {
@@ -95,6 +180,30 @@ public static class ReportEndpoints
             {
                 title = "Inventory Ledger Report";
                 headers = new List<string> { "Date", "Product SKU", "Product Name", "Type", "Ref", "Qty In", "Qty Out", "Running Bal" };
+                if (isCsv)
+                {
+                    return Results.Stream(async outputStream =>
+                    {
+                        using var writer = new StreamWriter(outputStream, System.Text.Encoding.UTF8, leaveOpen: true);
+                        await writer.WriteLineAsync(string.Join(",", headers.Select(h => $"\"{h.Replace("\"", "\"\"")}\"")));
+                        await foreach (var t in db.StockTransactions.Include(t => t.Product).AsNoTracking().OrderBy(t => t.TransactionDate).AsAsyncEnumerable())
+                        {
+                            var row = new List<string>
+                            {
+                                t.TransactionDate.ToString("yyyy-MM-dd HH:mm"),
+                                t.Product?.SKU ?? "",
+                                t.Product?.Name ?? "",
+                                t.TransactionType,
+                                t.Reference,
+                                t.QuantityIn.ToString("0.##"),
+                                t.QuantityOut.ToString("0.##"),
+                                t.RunningBalance.ToString("0.##")
+                            };
+                            await writer.WriteLineAsync(string.Join(",", row.Select(cell => $"\"{cell?.Replace("\"", "\"\"") ?? ""}\"")));
+                        }
+                    }, "text/csv", $"InventoryLedger_{DateTime.UtcNow:yyyyMMdd}.csv");
+                }
+
                 var list = await db.StockTransactions.Include(t => t.Product).AsNoTracking().OrderBy(t => t.TransactionDate).ToListAsync();
                 rows = list.Select(t => new List<string>
                 {
@@ -112,6 +221,30 @@ public static class ReportEndpoints
             {
                 title = "Inventory Valuation Report";
                 headers = new List<string> { "SKU", "Product Name", "Category", "Current Stock", "Cost Price", "Selling Price", "Cost Valuation", "Selling Valuation" };
+                if (isCsv)
+                {
+                    return Results.Stream(async outputStream =>
+                    {
+                        using var writer = new StreamWriter(outputStream, System.Text.Encoding.UTF8, leaveOpen: true);
+                        await writer.WriteLineAsync(string.Join(",", headers.Select(h => $"\"{h.Replace("\"", "\"\"")}\"")));
+                        await foreach (var p in db.Products.Include(p => p.Category).AsNoTracking().AsAsyncEnumerable())
+                        {
+                            var row = new List<string>
+                            {
+                                p.SKU,
+                                p.Name,
+                                p.Category?.Name ?? "",
+                                p.CurrentQuantity.ToString("0.##"),
+                                p.CostPrice.ToString("F2"),
+                                p.SellingPrice.ToString("F2"),
+                                (p.CurrentQuantity * p.CostPrice).ToString("F2"),
+                                (p.CurrentQuantity * p.SellingPrice).ToString("F2")
+                            };
+                            await writer.WriteLineAsync(string.Join(",", row.Select(cell => $"\"{cell?.Replace("\"", "\"\"") ?? ""}\"")));
+                        }
+                    }, "text/csv", $"InventoryValuation_{DateTime.UtcNow:yyyyMMdd}.csv");
+                }
+
                 var list = await db.Products.Include(p => p.Category).AsNoTracking().ToListAsync();
                 rows = list.Select(p => new List<string>
                 {
@@ -129,6 +262,26 @@ public static class ReportEndpoints
             {
                 title = "Low Stock Alert Report";
                 headers = new List<string> { "SKU", "Product Name", "Current Stock", "Reorder Level" };
+                if (isCsv)
+                {
+                    return Results.Stream(async outputStream =>
+                    {
+                        using var writer = new StreamWriter(outputStream, System.Text.Encoding.UTF8, leaveOpen: true);
+                        await writer.WriteLineAsync(string.Join(",", headers.Select(h => $"\"{h.Replace("\"", "\"\"")}\"")));
+                        await foreach (var p in db.Products.AsNoTracking().Where(p => p.CurrentQuantity <= p.ReorderLevel).AsAsyncEnumerable())
+                        {
+                            var row = new List<string>
+                            {
+                                p.SKU,
+                                p.Name,
+                                p.CurrentQuantity.ToString("0.##"),
+                                p.ReorderLevel.ToString("0.##")
+                            };
+                            await writer.WriteLineAsync(string.Join(",", row.Select(cell => $"\"{cell?.Replace("\"", "\"\"") ?? ""}\"")));
+                        }
+                    }, "text/csv", $"LowStock_{DateTime.UtcNow:yyyyMMdd}.csv");
+                }
+
                 var list = await db.Products.AsNoTracking().Where(p => p.CurrentQuantity <= p.ReorderLevel).ToListAsync();
                 rows = list.Select(p => new List<string>
                 {
@@ -142,6 +295,28 @@ public static class ReportEndpoints
             {
                 title = "Out of Stock Report";
                 headers = new List<string> { "SKU", "Product Name", "Category", "Brand", "Cost Price", "Reorder Level" };
+                if (isCsv)
+                {
+                    return Results.Stream(async outputStream =>
+                    {
+                        using var writer = new StreamWriter(outputStream, System.Text.Encoding.UTF8, leaveOpen: true);
+                        await writer.WriteLineAsync(string.Join(",", headers.Select(h => $"\"{h.Replace("\"", "\"\"")}\"")));
+                        await foreach (var p in db.Products.Include(p => p.Category).Include(p => p.Brand).AsNoTracking().Where(p => p.CurrentQuantity <= 0).AsAsyncEnumerable())
+                        {
+                            var row = new List<string>
+                            {
+                                p.SKU,
+                                p.Name,
+                                p.Category?.Name ?? "",
+                                p.Brand?.Name ?? "",
+                                p.CostPrice.ToString("F2"),
+                                p.ReorderLevel.ToString("0.##")
+                            };
+                            await writer.WriteLineAsync(string.Join(",", row.Select(cell => $"\"{cell?.Replace("\"", "\"\"") ?? ""}\"")));
+                        }
+                    }, "text/csv", $"OutOfStock_{DateTime.UtcNow:yyyyMMdd}.csv");
+                }
+
                 var list = await db.Products.Include(p => p.Category).Include(p => p.Brand).AsNoTracking().Where(p => p.CurrentQuantity <= 0).ToListAsync();
                 rows = list.Select(p => new List<string>
                 {
@@ -371,7 +546,7 @@ public static class ReportEndpoints
                 contentType = "application/pdf";
                 fileName = $"{type}_{DateTime.UtcNow:yyyyMMdd}.pdf";
             }
-            else if (format.Equals("csv", StringComparison.OrdinalIgnoreCase))
+            else if (isCsv)
             {
                 fileBytes = es.ExportToCsv(headers, rows);
                 contentType = "text/csv";

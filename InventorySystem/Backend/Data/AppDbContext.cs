@@ -9,6 +9,70 @@ public class AppDbContext : DbContext
     {
     }
 
+    public override async Task<int> SaveChangesAsync(System.Threading.CancellationToken cancellationToken = default)
+    {
+        var auditEntries = new System.Collections.Generic.List<(AuditLog Log, Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry Entry)>();
+        
+        foreach (var entry in ChangeTracker.Entries())
+        {
+            if (entry.Entity is AuditLog || entry.State == EntityState.Detached || entry.State == EntityState.Unchanged)
+                continue;
+
+            var auditLog = new AuditLog
+            {
+                Timestamp = DateTime.UtcNow,
+                EntityType = entry.Entity.GetType().Name,
+                Action = entry.State.ToString()
+            };
+
+            var detailsList = new System.Collections.Generic.List<string>();
+            if (entry.State == EntityState.Added)
+            {
+                foreach (var prop in entry.Properties)
+                {
+                    if (prop.Metadata.IsPrimaryKey()) continue;
+                    detailsList.Add($"{prop.Metadata.Name}: {prop.CurrentValue}");
+                }
+            }
+            else if (entry.State == EntityState.Modified)
+            {
+                foreach (var prop in entry.Properties)
+                {
+                    if (prop.IsModified)
+                    {
+                        detailsList.Add($"{prop.Metadata.Name}: {prop.OriginalValue} -> {prop.CurrentValue}");
+                    }
+                }
+            }
+            else if (entry.State == EntityState.Deleted)
+            {
+                foreach (var prop in entry.Properties)
+                {
+                    detailsList.Add($"{prop.Metadata.Name}: {prop.OriginalValue}");
+                }
+            }
+
+            auditLog.Details = string.Join("; ", detailsList);
+            auditEntries.Add((auditLog, entry));
+        }
+
+        var result = await base.SaveChangesAsync(cancellationToken);
+
+        if (auditEntries.Count > 0)
+        {
+            foreach (var item in auditEntries)
+            {
+                var primaryKey = item.Entry.Properties.FirstOrDefault(p => p.Metadata.IsPrimaryKey());
+                item.Log.EntityId = primaryKey?.CurrentValue?.ToString() ?? "Unknown";
+            }
+
+            AuditLogs.AddRange(auditEntries.Select(x => x.Log));
+            await base.SaveChangesAsync(cancellationToken);
+        }
+
+        return result;
+    }
+
     public DbSet<Product> Products => Set<Product>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<Brand> Brands => Set<Brand>();

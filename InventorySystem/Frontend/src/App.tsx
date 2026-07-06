@@ -24,7 +24,7 @@ import Inventory from './pages/Inventory';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import Launcher from './pages/Launcher';
-import { api } from './api';
+import { api, setSessionToken } from './api';
 import { getTheme, setTheme } from './utils/theme';
 import type { Theme } from './utils/theme';
 
@@ -62,6 +62,9 @@ export default function App() {
           const res = await api.getLauncherStatus();
           if (!cancelled) {
             setRecentDatabases(res.recentDatabases);
+            if (res.sessionToken) {
+              setSessionToken(res.sessionToken);
+            }
             setLauncherStatus(res.status);
             if (res.theme === 'light' || res.theme === 'dark') {
               setDarkMode(res.theme);

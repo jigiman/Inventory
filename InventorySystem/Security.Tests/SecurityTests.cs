@@ -241,4 +241,58 @@ public class SecurityTests
             if (File.Exists(dbPath)) File.Delete(dbPath);
         }
     }
+
+    [Fact]
+    public void DatabaseState_SessionToken_GeneratesAndClears()
+    {
+        var state = new DatabaseState();
+        Assert.Null(state.SessionToken);
+
+        state.SessionToken = "my-test-token";
+        Assert.Equal("my-test-token", state.SessionToken);
+
+        state.DbPath = null;
+        Assert.Null(state.SessionToken);
+    }
+
+    [Fact]
+    public async Task AppDbContext_AuditLogs_TracksChanges()
+    {
+        var dbPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".db");
+        if (File.Exists(dbPath)) File.Delete(dbPath);
+
+        try
+        {
+            var options = new DbContextOptionsBuilder<AppDbContext>()
+                .UseSqlite($"Data Source={dbPath}")
+                .Options;
+
+            using (var context = new AppDbContext(options))
+            {
+                await context.Database.EnsureCreatedAsync();
+
+                var category = new Category { Name = "AuditTestCategory" };
+                context.Categories.Add(category);
+                await context.SaveChangesAsync();
+
+                var logs = await context.AuditLogs.ToListAsync();
+                Assert.NotEmpty(logs);
+                var addLog = logs.FirstOrDefault(l => l.EntityType == nameof(Category) && l.Action == "Added");
+                Assert.NotNull(addLog);
+                Assert.Contains("Name: AuditTestCategory", addLog.Details);
+
+                category.Name = "AuditTestCategoryModified";
+                await context.SaveChangesAsync();
+
+                logs = await context.AuditLogs.ToListAsync();
+                var modifyLog = logs.FirstOrDefault(l => l.EntityType == nameof(Category) && l.Action == "Modified");
+                Assert.NotNull(modifyLog);
+                Assert.Contains("AuditTestCategoryModified", modifyLog.Details);
+            }
+        }
+        finally
+        {
+            if (File.Exists(dbPath)) File.Delete(dbPath);
+        }
+    }
 }
