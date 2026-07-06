@@ -142,7 +142,7 @@ export default function Dashboard() {
       window.removeEventListener('resize', handleResize);
       chartInstance.dispose();
     };
-  }, [loading, error, products]);
+  }, [loading, error, stats]);
 
   if (loading) {
     return (

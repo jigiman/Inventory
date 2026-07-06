@@ -4,9 +4,14 @@ if (paramBackend) {
   localStorage.setItem('backend_url', paramBackend);
 }
 
-const API_BASE = window.location.origin.includes('localhost:5173')
+let API_BASE = window.location.origin.includes('localhost:5173')
   ? (localStorage.getItem('backend_url') || 'http://127.0.0.1:5000')
   : window.location.origin;
+
+if (API_BASE.startsWith('https://127.0.0.1:5000') || API_BASE.startsWith('https://localhost:5000')) {
+  API_BASE = API_BASE.replace('https://', 'http://');
+  localStorage.setItem('backend_url', API_BASE);
+}
 
 let sessionToken = sessionStorage.getItem('session_token') || '';
 

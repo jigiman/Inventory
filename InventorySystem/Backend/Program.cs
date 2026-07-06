@@ -91,7 +91,7 @@ public class Program
         });
         builder.Services.AddOpenApi();
 
-        builder.WebHost.UseUrls($"https://127.0.0.1:{port}");
+        builder.WebHost.UseUrls($"http://127.0.0.1:{port}");
 
         var app = builder.Build();
 
