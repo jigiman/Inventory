@@ -67,6 +67,7 @@ public class Program
 
         // ── Core services ─────────────────────────────────────────────────────
         builder.Services.AddScoped<CloudSyncService>();
+        builder.Services.AddScoped<DbIntegrityService>();
         builder.Services.AddScoped<InventoryService>();
         builder.Services.AddScoped<BackupService>();
         builder.Services.AddScoped<ExportService>();
@@ -81,16 +82,16 @@ public class Program
             options.SerializerOptions.ReferenceHandler =
                 System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
         });
-        builder.Services.AddOpenApi();
         builder.Services.AddCors(options =>
         {
             options.AddDefaultPolicy(policy =>
-                policy.WithOrigins("http://localhost:5173", "http://127.0.0.1")
+                policy.WithOrigins("http://localhost:5173", "https://localhost:5173", "http://127.0.0.1", "https://127.0.0.1")
                       .AllowAnyHeader()
                       .AllowAnyMethod());
         });
+        builder.Services.AddOpenApi();
 
-        builder.WebHost.UseUrls($"http://127.0.0.1:{port}");
+        builder.WebHost.UseUrls($"https://127.0.0.1:{port}");
 
         var app = builder.Build();
 
@@ -136,7 +137,7 @@ public class Program
 
         await app.StartAsync();
 
-        var address = app.Urls.FirstOrDefault() ?? $"http://127.0.0.1:{port}";
+        var address = app.Urls.FirstOrDefault() ?? $"https://127.0.0.1:{port}";
         Log.Information("Backend started at {Address}", address);
         return (app, address);
     }

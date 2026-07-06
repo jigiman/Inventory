@@ -56,6 +56,13 @@ public class BackupService
             {
                 archive.CreateEntryFromFile(tempDbPath, "database.db");
 
+                // Package the salt file if it exists
+                var saltPath = dbPath + ".salt";
+                if (File.Exists(saltPath))
+                {
+                    archive.CreateEntryFromFile(saltPath, "database.db.salt");
+                }
+
                 var imagesDir = Path.Combine(appDataPath, "Images");
                 if (Directory.Exists(imagesDir))
                 {
@@ -96,6 +103,20 @@ public class BackupService
             var plainBackupPath = Path.Combine(backupsDir, $"backup_{timestamp}.zip");
             File.Move(tempZipPath, plainBackupPath, overwrite: true);
             finalBackupPath = plainBackupPath;
+        }
+
+        // Perform automated dry-run validation on the created backup file
+        try
+        {
+            await ValidateBackupFileAsync(finalBackupPath, password);
+            Serilog.Log.Information("Backup file verified successfully (dry-run restore passed).");
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "Backup verification failed! Deleting invalid backup file: {Path}", finalBackupPath);
+            if (File.Exists(finalBackupPath))
+                File.Delete(finalBackupPath);
+            throw new InvalidOperationException($"Backup validation failed: {ex.Message}", ex);
         }
 
         // Sync backup to cloud folder if configured
@@ -151,6 +172,13 @@ public class BackupService
                     dbEntry.ExtractToFile(dbPath, overwrite: true);
                 }
 
+                // Extract salt
+                var saltEntry = archive.GetEntry("database.db.salt");
+                if (saltEntry != null)
+                {
+                    saltEntry.ExtractToFile(dbPath + ".salt", overwrite: true);
+                }
+
                 // Extract images
                 foreach (var entry in archive.Entries)
                 {
@@ -170,6 +198,87 @@ public class BackupService
         {
             if (File.Exists(tempZipPath))
                 File.Delete(tempZipPath);
+        }
+    }
+
+    private async Task ValidateBackupFileAsync(string backupPath, string? password)
+    {
+        var tempFolder = Path.Combine(Path.GetTempPath(), $"backup_val_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempFolder);
+
+        var tempZip = Path.Combine(tempFolder, "temp.zip");
+        var tempDb = Path.Combine(tempFolder, "temp.db");
+
+        try
+        {
+            var isEncrypted = backupPath.EndsWith(".bak", StringComparison.OrdinalIgnoreCase);
+            if (isEncrypted)
+            {
+                if (string.IsNullOrEmpty(password))
+                    throw new InvalidOperationException("Password is required to decrypt backup.");
+                DecryptFile(backupPath, tempZip, password);
+            }
+            else
+            {
+                File.Copy(backupPath, tempZip);
+            }
+
+            using (var fs = new FileStream(tempZip, FileMode.Open))
+            using (var archive = new ZipArchive(fs, ZipArchiveMode.Read))
+            {
+                var entry = archive.GetEntry("database.db");
+                if (entry == null)
+                    throw new InvalidDataException("Backup ZIP archive does not contain 'database.db'.");
+                entry.ExtractToFile(tempDb, overwrite: true);
+
+                var saltEntry = archive.GetEntry("database.db.salt");
+                if (saltEntry != null)
+                {
+                    saltEntry.ExtractToFile(tempDb + ".salt", overwrite: true);
+                }
+            }
+
+            var builder = new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
+            {
+                DataSource = tempDb
+            };
+
+            if (!string.IsNullOrEmpty(password))
+            {
+                var saltPath = tempDb + ".salt";
+                byte[] salt;
+                if (File.Exists(saltPath))
+                {
+                    salt = File.ReadAllBytes(saltPath);
+                }
+                else
+                {
+                    var originalDb = GetDatabaseFilePath();
+                    var origSalt = originalDb + ".salt";
+                    if (File.Exists(origSalt))
+                        salt = File.ReadAllBytes(origSalt);
+                    else
+                        throw new FileNotFoundException("Salt file not found for verification.");
+                }
+
+                var key = Rfc2898DeriveBytes.Pbkdf2(password, salt, 100000, HashAlgorithmName.SHA256, 32);
+                builder.Password = $"x'{Convert.ToHexString(key)}'";
+            }
+
+            var connStr = builder.ToString();
+            var options = new DbContextOptionsBuilder<AppDbContext>()
+                .UseSqlite(connStr)
+                .Options;
+
+            using (var context = new AppDbContext(options))
+            {
+                var testQuery = await context.Settings.CountAsync();
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(tempFolder))
+                Directory.Delete(tempFolder, recursive: true);
         }
     }
 

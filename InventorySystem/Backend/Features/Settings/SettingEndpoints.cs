@@ -117,6 +117,16 @@ public static class SettingEndpoints
                     File.Delete(tempZipPath);
             }
         });
+
+        app.MapGet("/api/diagnostics/integrity", async (DbIntegrityService integrityService) =>
+        {
+            var (passed, errors) = await integrityService.RunIntegrityCheckAsync();
+            return Results.Ok(new
+            {
+                status = passed ? "HEALTHY" : "CORRUPT",
+                errors = errors
+            });
+        });
     }
 }
 

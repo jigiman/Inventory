@@ -23,11 +23,7 @@ public class InventoryService
             throw new ArgumentException("Product not found");
 
         // Calculate running balance based on latest transaction
-        var lastTx = await _context.StockTransactions
-            .Where(t => t.ProductId == productId)
-            .OrderByDescending(t => t.TransactionDate)
-            .ThenByDescending(t => t.Id)
-            .FirstOrDefaultAsync();
+        var lastTx = await CompiledQueries.GetLatestStockTransactionByProduct(_context, productId);
 
         decimal currentBalance = lastTx?.RunningBalance ?? 0;
         decimal newBalance = currentBalance + qtyIn - qtyOut;

@@ -5,6 +5,7 @@ using Backend.Services;
 using Microsoft.EntityFrameworkCore;
 using Backend.Data;
 using Backend.Models;
+using Backend.Features;
 using System.Threading.Tasks;
 
 namespace Security.Tests;
@@ -198,6 +199,46 @@ public class SecurityTests
             if (File.Exists(dbPath)) File.Delete(dbPath);
             var saltPath = dbPath + ".salt";
             if (File.Exists(saltPath)) File.Delete(saltPath);
+        }
+    }
+
+    [Fact]
+    public void LauncherConfig_PathEncryption_Succeeds()
+    {
+        var originalPath = "/Users/test/inventory_secret_path.db";
+        var encrypted = PersistentSecurity.Encrypt(originalPath);
+        Assert.NotEqual(originalPath, encrypted);
+
+        var decrypted = PersistentSecurity.Decrypt(encrypted);
+        Assert.Equal(originalPath, decrypted);
+    }
+
+    [Fact]
+    public async Task DbIntegrityService_VerifyChecks_SucceedsOnHealthyDb()
+    {
+        var dbPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".db");
+        if (File.Exists(dbPath)) File.Delete(dbPath);
+
+        try
+        {
+            var options = new DbContextOptionsBuilder<AppDbContext>()
+                .UseSqlite($"Data Source={dbPath}")
+                .Options;
+
+            using (var context = new AppDbContext(options))
+            {
+                await context.Database.EnsureCreatedAsync();
+                var integrityService = new DbIntegrityService(context);
+                
+                var checkResult = await integrityService.RunIntegrityCheckAsync();
+                
+                Assert.True(checkResult.Passed);
+                Assert.Empty(checkResult.Errors);
+            }
+        }
+        finally
+        {
+            if (File.Exists(dbPath)) File.Delete(dbPath);
         }
     }
 }
