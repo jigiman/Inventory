@@ -250,11 +250,11 @@ export const api = {
     recentDatabases: { name: string; path: string; lastOpened: string }[];
     theme: 'light' | 'dark';
   }>('/api/launcher'),
-  openDatabase: (dbPath: string) => request<{ status: string; dbPath: string }>('/api/launcher/open', {
-    method: 'POST', body: JSON.stringify({ dbPath }),
+  openDatabase: (dbPath: string, password?: string) => request<{ status: string; dbPath: string }>('/api/launcher/open', {
+    method: 'POST', body: JSON.stringify({ dbPath, password }),
   }),
-  createDatabase: (dbPath: string, name?: string) => request<{ status: string; dbPath: string; name: string }>('/api/launcher/new', {
-    method: 'POST', body: JSON.stringify({ dbPath, name }),
+  createDatabase: (dbPath: string, name?: string, password?: string) => request<{ status: string; dbPath: string; name: string }>('/api/launcher/new', {
+    method: 'POST', body: JSON.stringify({ dbPath, name, password }),
   }),
   saveTheme: (theme: 'light' | 'dark') => request<{ theme: 'light' | 'dark' }>('/api/launcher/theme', {
     method: 'POST', body: JSON.stringify({ theme }),

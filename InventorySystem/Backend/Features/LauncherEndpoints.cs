@@ -61,6 +61,7 @@ public static class LauncherEndpoints
                 return Results.BadRequest($"Database file not found: {path}");
 
             dbState.DbPath = path;
+            dbState.Password = req.Password;
 
             try
             {
@@ -117,6 +118,7 @@ public static class LauncherEndpoints
             }
 
             dbState.DbPath = path;
+            dbState.Password = req.Password;
 
             try
             {
@@ -247,6 +249,6 @@ public static class LauncherEndpoints
 
 // ── request models ─────────────────────────────────────────────────────────────
 
-public record OpenDatabaseRequest(string DbPath);
-public record NewDatabaseRequest(string DbPath, string? Name);
+public record OpenDatabaseRequest(string DbPath, string? Password);
+public record NewDatabaseRequest(string DbPath, string? Name, string? Password);
 public record ThemeRequest(string Theme);

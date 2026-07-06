@@ -18,13 +18,8 @@ public class BackupService
     public string GetDatabaseFilePath()
     {
         var connStr = _context.Database.GetDbConnection().ConnectionString;
-        // Extract connection source (e.g. Data Source=/path/to/db)
-        var parts = connStr.Split('=', StringSplitOptions.TrimEntries);
-        if (parts.Length > 1)
-        {
-            return parts[1];
-        }
-        throw new InvalidOperationException("Could not extract database file path from connection string.");
+        var builder = new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder(connStr);
+        return builder.DataSource ?? throw new InvalidOperationException("Could not extract database file path from connection string.");
     }
 
     public async Task<string> CreateBackupAsync()
