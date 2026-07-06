@@ -55,6 +55,19 @@ public static class DbSeeder
         db.Suppliers.AddRange(suppliers);
         await db.SaveChangesAsync();
 
+        // 4.5. Customers
+        var defaultCustomer = new Customer
+        {
+            Name = "Walk-in Customer",
+            ContactPerson = "N/A",
+            Phone = "N/A",
+            Email = "walkin@store.com",
+            Address = "N/A",
+            Notes = "Default customer for quick retail sales"
+        };
+        db.Customers.Add(defaultCustomer);
+        await db.SaveChangesAsync();
+
         // 5. Products
         var products = new List<Product>
         {

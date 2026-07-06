@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Trash2, Plus, ArrowDownRight, Clipboard } from 'lucide-react';
+import { Trash2, Plus, ArrowDownRight, Clipboard, Eye } from 'lucide-react';
 import { api } from '../api';
 import type { PurchaseOrder, Supplier, Product, PurchaseItem } from '../api';
 import { Button } from '../components/ui/Button';
@@ -17,6 +17,7 @@ export default function Purchasing() {
   // Dialog States
   const [openCreate, setOpenCreate] = useState(false);
   const [openReceive, setOpenReceive] = useState(false);
+  const [openDetails, setOpenDetails] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<PurchaseOrder | null>(null);
 
   // New PO Form States
@@ -174,17 +175,28 @@ export default function Purchasing() {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right">
-                    {order.status !== 'Received' ? (
-                      <Button variant="outline" size="sm" onClick={() => handleOpenReceive(order)} className="inline-flex items-center space-x-1.5">
-                        <ArrowDownRight size={14} />
-                        <span>Receive Items</span>
+                    <div className="flex justify-end items-center space-x-2">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => { setSelectedOrder(order); setOpenDetails(true); }}
+                        className="inline-flex items-center space-x-1.5 cursor-pointer"
+                      >
+                        <Eye size={14} />
+                        <span>Details</span>
                       </Button>
-                    ) : (
-                      <span className="inline-flex items-center text-xs font-semibold text-slate-400 space-x-1">
-                        <Clipboard size={14} />
-                        <span>Completed</span>
-                      </span>
-                    )}
+                      {order.status !== 'Received' ? (
+                        <Button variant="outline" size="sm" onClick={() => handleOpenReceive(order)} className="inline-flex items-center space-x-1.5">
+                          <ArrowDownRight size={14} />
+                          <span>Receive Items</span>
+                        </Button>
+                      ) : (
+                        <span className="inline-flex items-center text-xs font-semibold text-slate-400 space-x-1 px-3">
+                          <Clipboard size={14} />
+                          <span>Completed</span>
+                        </span>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -305,6 +317,99 @@ export default function Purchasing() {
           </div>
         </form>
       </Dialog>
+
+      {/* View PO Details Dialog */}
+      {selectedOrder && openDetails && (
+        <Dialog 
+          open={openDetails} 
+          onClose={() => { setOpenDetails(false); setSelectedOrder(null); }} 
+          title={`Purchase Order: ${selectedOrder.orderNumber}`} 
+          size="md"
+        >
+          <div className="space-y-6 text-sm">
+            <div className="grid grid-cols-2 gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Order Date</p>
+                <p className="mt-1 font-semibold text-slate-900 dark:text-slate-100">
+                  {selectedOrder.orderDate ? new Date(selectedOrder.orderDate).toLocaleString() : '-'}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Status</p>
+                <p className="mt-1">
+                  <span className={`inline-block text-3xs font-extrabold uppercase tracking-wide px-2.5 py-0.5 rounded-full border ${
+                    selectedOrder.status === 'Received'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-250/10 dark:bg-emerald-950/20 dark:text-emerald-400'
+                      : 'bg-amber-50 text-amber-700 border-amber-250/10 dark:bg-amber-950/20 dark:text-amber-400'
+                  }`}>
+                    {selectedOrder.status}
+                  </span>
+                </p>
+              </div>
+            </div>
+
+            <div className="border-b border-slate-100 dark:border-slate-800 pb-4">
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Supplier Details</p>
+              <div className="bg-slate-50 dark:bg-slate-950/40 border border-slate-200/40 dark:border-slate-800 rounded-xl p-3.5 space-y-1">
+                <p className="font-bold text-slate-900 dark:text-slate-100">{selectedOrder.supplier?.name}</p>
+                {selectedOrder.supplier?.contactPerson && (
+                  <p className="text-xs text-slate-550 dark:text-slate-400">Contact: {selectedOrder.supplier.contactPerson}</p>
+                )}
+                {selectedOrder.supplier?.phone && (
+                  <p className="text-xs text-slate-550 dark:text-slate-400">Phone: {selectedOrder.supplier.phone}</p>
+                )}
+                {selectedOrder.supplier?.email && (
+                  <p className="text-xs text-slate-550 dark:text-slate-400">Email: {selectedOrder.supplier.email}</p>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Order Items</p>
+              <div className="overflow-hidden border border-slate-200/50 dark:border-slate-800/60 rounded-xl">
+                <table className="w-full text-left text-xs text-slate-500 dark:text-slate-400">
+                  <thead className="bg-slate-50 dark:bg-slate-900/40 text-2xs font-extrabold uppercase tracking-wider text-slate-400 border-b border-slate-200/50 dark:border-slate-800/60">
+                    <tr>
+                      <th className="px-4 py-2.5">Product</th>
+                      <th className="px-4 py-2.5 text-right">Qty Ordered</th>
+                      <th className="px-4 py-2.5 text-right">Qty Received</th>
+                      <th className="px-4 py-2.5 text-right">Cost Price</th>
+                      <th className="px-4 py-2.5 text-right">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
+                    {selectedOrder.items.map((item) => (
+                      <tr key={item.id}>
+                        <td className="px-4 py-3 font-semibold text-slate-900 dark:text-slate-200">
+                          {item.product?.name}
+                          {item.product?.sku && <span className="block text-3xs font-normal font-mono text-slate-400 mt-0.5">{item.product.sku}</span>}
+                        </td>
+                        <td className="px-4 py-3 text-right font-bold">{item.quantityOrdered}</td>
+                        <td className="px-4 py-3 text-right font-bold">{item.quantityReceived}</td>
+                        <td className="px-4 py-3 text-right">${(item.costPrice ?? 0).toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right font-bold text-slate-900 dark:text-slate-200">
+                          ${((item.quantityOrdered ?? 0) * (item.costPrice ?? 0)).toFixed(2)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="flex justify-between items-center bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100/50 dark:border-indigo-900/40 rounded-xl p-4">
+              <span className="text-xs font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400">Total Amount</span>
+              <span className="text-lg font-extrabold text-indigo-700 dark:text-indigo-400">
+                ${selectedOrder.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
+
+            <div className="flex justify-end pt-4 border-t border-slate-100 dark:border-slate-800">
+              <Button onClick={() => { setOpenDetails(false); setSelectedOrder(null); }}>Close</Button>
+            </div>
+          </div>
+        </Dialog>
+      )}
     </div>
   );
 }

@@ -268,6 +268,16 @@ export const api = {
   getDebtors: () => request<FinanceReportItem[]>('/api/finance/debtors'),
   getCreditors: () => request<FinanceReportItem[]>('/api/finance/creditors'),
   recordPayment: (payment: Payment) => request<Payment>('/api/payments', { method: 'POST', body: JSON.stringify(payment) }),
+  getPayments: (params?: { saleId?: number; purchaseOrderId?: number }) => {
+    let url = '/api/payments';
+    if (params) {
+      const q = new URLSearchParams();
+      if (params.saleId) q.append('saleId', params.saleId.toString());
+      if (params.purchaseOrderId) q.append('purchaseOrderId', params.purchaseOrderId.toString());
+      url += '?' + q.toString();
+    }
+    return request<Payment[]>(url);
+  },
 
   // Inventory
   getLedger: (page = 1, pageSize = 50, search?: string) => {

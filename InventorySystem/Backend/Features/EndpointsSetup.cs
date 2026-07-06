@@ -587,6 +587,14 @@ public static class EndpointsSetup
             return Results.Ok(report);
         });
 
+        app.MapGet("/api/payments", async (AppDbContext db, int? saleId, int? purchaseOrderId) =>
+        {
+            var query = db.Payments.AsQueryable();
+            if (saleId != null) query = query.Where(p => p.SaleId == saleId);
+            if (purchaseOrderId != null) query = query.Where(p => p.PurchaseOrderId == purchaseOrderId);
+            return await query.ToListAsync();
+        });
+
         app.MapPost("/api/payments", async (AppDbContext db, Payment payment) =>
         {
             if (payment.Amount <= 0)
@@ -840,6 +848,85 @@ public static class EndpointsSetup
                     po.Status ?? "",
                     po.Items?.Count.ToString() ?? "0",
                     po.Items?.Sum(i => i.QuantityOrdered * i.UnitPrice).ToString("F2") ?? "0.00"
+                }).ToList();
+            }
+            else if (type == "SalesReport")
+            {
+                title = "Sales Summary Report";
+                headers = new List<string> { "Sale Number", "Customer Name", "Date", "Items Count", "Status", "Total Amount" };
+                var list = await db.Sales.Include(s => s.Customer).Include(s => s.Items).AsNoTracking().ToListAsync();
+                rows = list.Select(s => new List<string>
+                {
+                    s.SaleNumber,
+                    s.Customer?.Name ?? "",
+                    s.SaleDate.ToString("yyyy-MM-dd HH:mm"),
+                    s.Items?.Count.ToString() ?? "0",
+                    s.Status,
+                    s.TotalAmount.ToString("F2")
+                }).ToList();
+            }
+            else if (type == "DebtorsReport")
+            {
+                title = "Debtors Balance Report";
+                headers = new List<string> { "Customer Name", "Total Sales", "Total Paid", "Outstanding Balance" };
+                var sales = await db.Sales
+                    .GroupBy(s => s.CustomerId)
+                    .Select(g => new { CustomerId = g.Key, TotalSales = g.Sum(s => s.TotalAmount) })
+                    .ToListAsync();
+                var payments = await db.Payments
+                    .Where(p => p.CustomerId != null)
+                    .GroupBy(p => p.CustomerId)
+                    .Select(g => new { CustomerId = g.Key.Value, TotalPaid = g.Sum(p => p.Amount) })
+                    .ToListAsync();
+                var customers = await db.Customers.ToListAsync();
+                var list = customers.Select(c => {
+                    var totalSales = sales.FirstOrDefault(s => s.CustomerId == c.Id)?.TotalSales ?? 0;
+                    var totalPaid = payments.FirstOrDefault(p => p.CustomerId == c.Id)?.TotalPaid ?? 0;
+                    return new {
+                        Name = c.Name,
+                        TotalSales = totalSales,
+                        TotalPaid = totalPaid,
+                        Balance = totalSales - totalPaid
+                    };
+                }).Where(r => r.Balance != 0).ToList();
+                rows = list.Select(r => new List<string>
+                {
+                    r.Name,
+                    r.TotalSales.ToString("F2"),
+                    r.TotalPaid.ToString("F2"),
+                    r.Balance.ToString("F2")
+                }).ToList();
+            }
+            else if (type == "CreditorsReport")
+            {
+                title = "Creditors Balance Report";
+                headers = new List<string> { "Supplier Name", "Total Purchases", "Total Paid", "Outstanding Balance" };
+                var purchases = await db.PurchaseOrders
+                    .GroupBy(po => po.SupplierId)
+                    .Select(g => new { SupplierId = g.Key, TotalPurchases = g.Sum(po => po.TotalAmount) })
+                    .ToListAsync();
+                var payments = await db.Payments
+                    .Where(p => p.SupplierId != null)
+                    .GroupBy(p => p.SupplierId)
+                    .Select(g => new { SupplierId = g.Key.Value, TotalPaid = g.Sum(p => p.Amount) })
+                    .ToListAsync();
+                var suppliers = await db.Suppliers.ToListAsync();
+                var list = suppliers.Select(s => {
+                    var totalPurchases = purchases.FirstOrDefault(p => p.SupplierId == s.Id)?.TotalPurchases ?? 0;
+                    var totalPaid = payments.FirstOrDefault(p => p.SupplierId == s.Id)?.TotalPaid ?? 0;
+                    return new {
+                        Name = s.Name,
+                        TotalPurchases = totalPurchases,
+                        TotalPaid = totalPaid,
+                        Balance = totalPurchases - totalPaid
+                    };
+                }).Where(r => r.Balance != 0).ToList();
+                rows = list.Select(r => new List<string>
+                {
+                    r.Name,
+                    r.TotalPurchases.ToString("F2"),
+                    r.TotalPaid.ToString("F2"),
+                    r.Balance.ToString("F2")
                 }).ToList();
             }
             else

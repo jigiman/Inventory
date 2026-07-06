@@ -13,7 +13,9 @@ import {
   Zap,
   Clock,
   Building2,
-  ShoppingCart
+  ShoppingCart,
+  ArrowDownLeft,
+  ArrowUpRight
 } from 'lucide-react';
 import { api } from '../api';
 import { Button } from '../components/ui/Button';
@@ -31,6 +33,9 @@ export default function Reports() {
     SlowMoving: 'pdf',
     SupplierReport: 'pdf',
     PurchaseReport: 'pdf',
+    SalesReport: 'pdf',
+    DebtorsReport: 'pdf',
+    CreditorsReport: 'pdf',
   });
 
   const handleFormatChange = (reportKey: string, format: string) => {
@@ -123,6 +128,30 @@ export default function Reports() {
       icon: <ShoppingCart size={18} />,
       iconBg: 'bg-teal-50 dark:bg-teal-950/40',
       iconColor: 'text-teal-600 dark:text-teal-400'
+    },
+    {
+      key: 'SalesReport',
+      title: 'Sales Summary',
+      description: 'Generates a summary of all sales transactions, including invoice numbers, customers, dates, and total revenues.',
+      icon: <ShoppingCart size={18} />,
+      iconBg: 'bg-emerald-50 dark:bg-emerald-950/40',
+      iconColor: 'text-emerald-600 dark:text-emerald-400'
+    },
+    {
+      key: 'DebtorsReport',
+      title: 'Debtors Balance Report',
+      description: 'Lists customers with outstanding balances, showing total amount purchased, paid to date, and balance due.',
+      icon: <ArrowDownLeft size={18} />,
+      iconBg: 'bg-rose-50 dark:bg-rose-950/40',
+      iconColor: 'text-rose-600 dark:text-rose-400'
+    },
+    {
+      key: 'CreditorsReport',
+      title: 'Creditors Balance Report',
+      description: 'Lists suppliers with outstanding payments, showing total purchases, payments to date, and balance owed.',
+      icon: <ArrowUpRight size={18} />,
+      iconBg: 'bg-amber-50 dark:bg-amber-950/40',
+      iconColor: 'text-amber-600 dark:text-amber-400'
     }
   ];
 

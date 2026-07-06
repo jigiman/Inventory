@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Settings2, ClipboardList, Search, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Settings2, ClipboardList, Search, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 import { api } from '../api';
 import type { StockTransaction, Product, StockAdjustment, StockCount } from '../api';
 import { Button } from '../components/ui/Button';
@@ -24,6 +24,9 @@ export default function Inventory() {
   const [sortAsc, setSortAsc] = useState<boolean>(false); // default descending to show newest first
   const [currentPage, setCurrentPage] = useState<number>(1);
   const itemsPerPage = 50;
+
+  // Details Dialog state
+  const [selectedTx, setSelectedTx] = useState<StockTransaction | null>(null);
 
   // Form states
   const [adjustForm, setAdjustForm] = useState<StockAdjustment>({
@@ -216,12 +219,6 @@ export default function Inventory() {
                         {sortField === 'transactionDate' && (sortAsc ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
                       </div>
                     </th>
-                    <th onClick={() => handleSort('product.sku')} className="px-6 py-4 cursor-pointer hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
-                      <div className="flex items-center space-x-1">
-                        <span>SKU</span>
-                        {sortField === 'product.sku' && (sortAsc ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
-                      </div>
-                    </th>
                     <th onClick={() => handleSort('product.name')} className="px-6 py-4 cursor-pointer hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
                       <div className="flex items-center space-x-1">
                         <span>Product</span>
@@ -246,17 +243,8 @@ export default function Inventory() {
                         {sortField === 'quantityOut' && (sortAsc ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
                       </div>
                     </th>
-                    <th onClick={() => handleSort('runningBalance')} className="px-6 py-4 cursor-pointer hover:text-slate-700 dark:hover:text-slate-200 transition-colors text-right">
-                      <div className="flex items-center justify-end space-x-1">
-                        <span>Running Bal</span>
-                        {sortField === 'runningBalance' && (sortAsc ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
-                      </div>
-                    </th>
-                    <th onClick={() => handleSort('reference')} className="px-6 py-4 cursor-pointer hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
-                      <div className="flex items-center space-x-1">
-                        <span>Reference</span>
-                        {sortField === 'reference' && (sortAsc ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
-                      </div>
+                    <th className="px-6 py-4 text-right">
+                      Actions
                     </th>
                   </tr>
                 </thead>
@@ -266,7 +254,6 @@ export default function Inventory() {
                     return (
                       <tr key={tx.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/10 transition-colors">
                         <td className="px-6 py-3.5 text-xs text-slate-500 dark:text-slate-450">{new Date(tx.transactionDate).toLocaleString()}</td>
-                        <td className="px-6 py-3.5 font-mono text-xs">{tx.product?.sku}</td>
                         <td className="px-6 py-3.5 font-bold text-slate-900 dark:text-slate-200">{tx.product?.name}</td>
                         <td className="px-6 py-3.5">
                           <span className={`text-3xs font-extrabold uppercase tracking-wide px-2.5 py-0.5 rounded-full border ${
@@ -279,14 +266,23 @@ export default function Inventory() {
                         </td>
                         <td className="px-6 py-3.5 text-right font-extrabold text-slate-700 dark:text-slate-350">{tx.quantityIn > 0 ? `+${tx.quantityIn}` : '-'}</td>
                         <td className="px-6 py-3.5 text-right font-extrabold text-rose-600 dark:text-rose-400">{tx.quantityOut > 0 ? `-${tx.quantityOut}` : '-'}</td>
-                        <td className="px-6 py-3.5 text-right font-bold text-indigo-650 dark:text-indigo-400">{tx.runningBalance}</td>
-                        <td className="px-6 py-3.5 text-slate-450 truncate max-w-xs">{tx.reference || '-'}</td>
+                        <td className="px-6 py-3.5 text-right">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="inline-flex items-center space-x-1 cursor-pointer"
+                            onClick={() => setSelectedTx(tx)}
+                          >
+                            <Eye size={14} />
+                            <span>Details</span>
+                          </Button>
+                        </td>
                       </tr>
                     );
                   })}
                   {paginatedLedger.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="py-12 text-center text-slate-400 font-medium">
+                      <td colSpan={6} className="py-12 text-center text-slate-400 font-medium">
                         No ledger transactions found matching your search.
                       </td>
                     </tr>
@@ -437,6 +433,76 @@ export default function Inventory() {
           </div>
         </form>
       </Dialog>
+
+      {/* Transaction Details Dialog */}
+      {selectedTx && (
+        <Dialog 
+          open={!!selectedTx} 
+          onClose={() => setSelectedTx(null)} 
+          title="Transaction Details" 
+          size="sm"
+        >
+          <div className="space-y-4 text-sm">
+            <div className="grid grid-cols-2 gap-4 border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Date/Time</p>
+                <p className="mt-1 font-semibold text-slate-900 dark:text-slate-100">
+                  {new Date(selectedTx.transactionDate).toLocaleString()}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Type</p>
+                <p className="mt-1">
+                  <span className={`inline-block text-3xs font-extrabold uppercase tracking-wide px-2.5 py-0.5 rounded-full border ${
+                    selectedTx.transactionType === 'Purchase' || selectedTx.transactionType === 'Opening' || selectedTx.transactionType === 'Adjustment+'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-250/10 dark:bg-emerald-950/20 dark:text-emerald-400'
+                      : 'bg-rose-50 text-rose-700 border-rose-250/10 dark:bg-rose-950/20 dark:text-rose-400'
+                  }`}>
+                    {selectedTx.transactionType}
+                  </span>
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">SKU</p>
+                <p className="mt-1 font-mono text-slate-900 dark:text-slate-100">{selectedTx.product?.sku || '-'}</p>
+              </div>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Product</p>
+                <p className="mt-1 font-semibold text-slate-900 dark:text-slate-100">{selectedTx.product?.name || '-'}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4 border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Qty In</p>
+                <p className="mt-1 font-semibold text-slate-900 dark:text-slate-100">{selectedTx.quantityIn > 0 ? `+${selectedTx.quantityIn}` : '-'}</p>
+              </div>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Qty Out</p>
+                <p className="mt-1 font-semibold text-rose-600 dark:text-rose-400">{selectedTx.quantityOut > 0 ? `-${selectedTx.quantityOut}` : '-'}</p>
+              </div>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Running Bal</p>
+                <p className="mt-1 font-bold text-indigo-650 dark:text-indigo-400">{selectedTx.runningBalance}</p>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Reference</p>
+              <p className="mt-1 font-medium text-slate-650 dark:text-slate-300 break-words whitespace-pre-wrap">
+                {selectedTx.reference || '-'}
+              </p>
+            </div>
+
+            <div className="flex justify-end pt-4 border-t border-slate-100 dark:border-slate-800">
+              <Button onClick={() => setSelectedTx(null)}>Close</Button>
+            </div>
+          </div>
+        </Dialog>
+      )}
     </div>
   );
 }

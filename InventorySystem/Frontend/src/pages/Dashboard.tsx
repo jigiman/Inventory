@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { 
-  Package, 
-  DollarSign, 
   AlertTriangle, 
   AlertOctagon,
   Clock,
@@ -178,29 +176,7 @@ export default function Dashboard() {
     <div className="space-y-6">
       
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 pb-4">
-        <div className="flex items-center space-x-4.5 py-3">
-          <div className="rounded-2xl bg-indigo-50 p-3.5 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400">
-            <Package size={24} />
-          </div>
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Products</p>
-            <h3 className="text-2xl font-extrabold text-slate-900 dark:text-slate-100 mt-1">{stats?.totalProducts}</h3>
-          </div>
-        </div>
-
-        <div className="flex items-center space-x-4.5 py-3">
-          <div className="rounded-2xl bg-emerald-50 p-3.5 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">
-            <DollarSign size={24} />
-          </div>
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Stock Valuation</p>
-            <h3 className="text-2xl font-extrabold text-slate-900 dark:text-slate-100 mt-1">
-              ${stats?.totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </h3>
-          </div>
-        </div>
-
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 pb-4">
         <div className="flex items-center space-x-4.5 py-3">
           <div className="rounded-2xl bg-amber-50 p-3.5 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
             <AlertTriangle size={24} />
