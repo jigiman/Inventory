@@ -70,6 +70,7 @@ public static class LauncherEndpoints
             catch (Exception ex)
             {
                 dbState.DbPath = null;
+                dbState.Password = null;
                 Log.Error(ex, "Failed to open database: {Path}", path);
                 return Results.Problem($"Failed to open database: {ex.Message}");
             }
@@ -127,6 +128,7 @@ public static class LauncherEndpoints
             catch (Exception ex)
             {
                 dbState.DbPath = null;
+                dbState.Password = null;
                 Log.Error(ex, "Failed to create database: {Path}", path);
                 return Results.Problem($"Failed to create database: {ex.Message}");
             }
@@ -208,6 +210,10 @@ public static class LauncherEndpoints
         using var scope = services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await db.Database.MigrateAsync();
+
+        // Enable write-ahead logging and safe normal synchronizations for durability
+        await db.Database.ExecuteSqlRawAsync("PRAGMA journal_mode = WAL;");
+        await db.Database.ExecuteSqlRawAsync("PRAGMA synchronous = NORMAL;");
 
         if (seed)
         {

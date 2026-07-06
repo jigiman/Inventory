@@ -25,19 +25,28 @@ public class Program
 
     public static async Task<(WebApplication App, string Address)> StartAsync(string[] args, int port = 0)
     {
-        Log.Logger = new LoggerConfiguration()
-            .WriteTo.Console()
-            .CreateLogger();
-
-        var builder = WebApplication.CreateBuilder(args);
-        builder.Host.UseSerilog();
-
         // ── AppData directories ───────────────────────────────────────────────
         var appDataPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "InventorySystem"
         );
         Directory.CreateDirectory(appDataPath);
+
+        // Initialize SQLCipher provider raw library
+        SQLitePCL.Batteries_V2.Init();
+
+        Log.Logger = new LoggerConfiguration()
+            .WriteTo.Console()
+            .WriteTo.File(
+                Path.Combine(appDataPath, "Logs", "log-.txt"),
+                rollingInterval: RollingInterval.Day,
+                retainedFileCountLimit: 30,
+                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}"
+            )
+            .CreateLogger();
+
+        var builder = WebApplication.CreateBuilder(args);
+        builder.Host.UseSerilog();
 
         // ── DatabaseState singleton ───────────────────────────────────────────
         // Holds the runtime-selected database path. Set by launcher endpoints.
