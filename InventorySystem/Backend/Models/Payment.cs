@@ -20,6 +20,8 @@ public class Payment
 
     public string Notes { get; set; } = string.Empty;
 
+    public bool IsRefund { get; set; } = false;
+
     // A payment can be from a Customer (Receipt) or to a Supplier (Payment)
     public int? CustomerId { get; set; }
     public Customer? Customer { get; set; }

@@ -216,28 +216,10 @@ export default function Products() {
               <table className="w-full text-left text-sm text-slate-500 dark:text-slate-400">
                 <thead className="bg-slate-550/5 text-2xs font-extrabold uppercase tracking-wider text-slate-400 dark:bg-slate-900/40 border-b border-slate-200/50 dark:border-slate-800/60 select-none">
                   <tr>
-                    <th onClick={() => handleSort('sku')} className="px-6 py-4 cursor-pointer hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
-                      <div className="flex items-center space-x-1">
-                        <span>SKU</span>
-                        {sortField === 'sku' && (sortAsc ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
-                      </div>
-                    </th>
                     <th onClick={() => handleSort('name')} className="px-6 py-4 cursor-pointer hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
                       <div className="flex items-center space-x-1">
                         <span>Name</span>
                         {sortField === 'name' && (sortAsc ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
-                      </div>
-                    </th>
-                    <th onClick={() => handleSort('category.name')} className="px-6 py-4 cursor-pointer hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
-                      <div className="flex items-center space-x-1">
-                        <span>Category</span>
-                        {sortField === 'category.name' && (sortAsc ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
-                      </div>
-                    </th>
-                    <th onClick={() => handleSort('brand.name')} className="px-6 py-4 cursor-pointer hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
-                      <div className="flex items-center space-x-1">
-                        <span>Brand</span>
-                        {sortField === 'brand.name' && (sortAsc ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
                       </div>
                     </th>
                     <th onClick={() => handleSort('currentQuantity')} className="px-6 py-4 cursor-pointer hover:text-slate-700 dark:hover:text-slate-200 transition-colors text-right">
@@ -266,10 +248,7 @@ export default function Products() {
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
                   {paginatedProducts.map((p) => (
                     <tr key={p.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/10 transition-colors">
-                      <td className="px-6 py-3.5 font-mono text-xs">{p.sku}</td>
                       <td className="px-6 py-3.5 font-bold text-slate-900 dark:text-slate-200">{p.name}</td>
-                      <td className="px-6 py-3.5 font-medium">{p.category?.name}</td>
-                      <td className="px-6 py-3.5 text-slate-450">{p.brand?.name}</td>
                       <td className="px-6 py-3.5 text-right font-extrabold text-slate-700 dark:text-slate-350">{p.currentQuantity}</td>
                       <td className="px-6 py-3.5 text-right font-semibold">${p.costPrice.toFixed(2)}</td>
                       <td className="px-6 py-3.5 text-right font-bold text-indigo-600 dark:text-indigo-400">${p.sellingPrice.toFixed(2)}</td>

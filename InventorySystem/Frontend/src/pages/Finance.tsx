@@ -14,6 +14,15 @@ export default function Finance() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // Search & Filter States
+  const [searchQuery, setSearchQuery] = useState('');
+  const [minBalance, setMinBalance] = useState<number | ''>('');
+
+  // Pagination States
+  const [totalCount, setTotalCount] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(25);
+
   // Payment Dialog
   const [openPayment, setOpenPayment] = useState(false);
   const [selectedEntity, setSelectedEntity] = useState<FinanceReportItem | null>(null);
@@ -28,12 +37,22 @@ export default function Finance() {
     setLoading(true);
     setError('');
     try {
-      const [dbts, crdts] = await Promise.all([
-        api.getDebtors(),
-        api.getCreditors(),
-      ]);
-      setDebtors(dbts);
-      setCreditors(crdts);
+      const params = {
+        page: currentPage,
+        pageSize: pageSize,
+        search: searchQuery || undefined,
+        minBalance: minBalance === '' ? undefined : minBalance
+      };
+
+      if (activeTab === 'debtors') {
+        const result = await api.getDebtors(params);
+        setDebtors(result.items);
+        setTotalCount(result.totalCount);
+      } else {
+        const result = await api.getCreditors(params);
+        setCreditors(result.items);
+        setTotalCount(result.totalCount);
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to load financial data');
     } finally {
@@ -42,8 +61,16 @@ export default function Finance() {
   }
 
   useEffect(() => {
+    if (currentPage !== 1) {
+      setCurrentPage(1);
+    } else {
+      loadData();
+    }
+  }, [activeTab, searchQuery, minBalance]);
+
+  useEffect(() => {
     loadData();
-  }, []);
+  }, [currentPage]);
 
   const handleOpenPayment = (item: FinanceReportItem) => {
     setSelectedEntity(item);
@@ -53,7 +80,8 @@ export default function Finance() {
       reference: '',
       notes: '',
       customerId: item.customer?.id,
-      supplierId: item.supplier?.id
+      supplierId: item.supplier?.id,
+      isRefund: false
     });
     setOpenPayment(true);
   };
@@ -73,6 +101,8 @@ export default function Finance() {
   };
 
   const data = activeTab === 'debtors' ? debtors : creditors;
+
+
 
   return (
     <div className="space-y-6">
@@ -106,6 +136,23 @@ export default function Finance() {
           <ArrowUpRight size={14} />
           <span>Creditors (Suppliers)</span>
         </button>
+      </div>
+
+      {/* Search & Filter Bar */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 dark:bg-slate-900/40 p-4 rounded-2xl border border-slate-200/50 dark:border-slate-800/60 max-w-xl">
+        <Input
+          label="Search Name"
+          placeholder="Search by name..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+        <Input
+          label="Minimum Outstanding Balance"
+          type="number"
+          placeholder="e.g. 100"
+          value={minBalance}
+          onChange={(e) => setMinBalance(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+        />
       </div>
 
       {loading ? (
@@ -150,12 +197,40 @@ export default function Finance() {
               {data.length === 0 && (
                 <tr>
                   <td colSpan={5} className="py-12 text-center text-slate-400 font-medium">
-                    No outstanding {activeTab} found.
+                    No outstanding {activeTab} matching filters found.
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
+
+          {/* Pagination Controls */}
+          <div className="flex justify-between items-center bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200/50 dark:border-slate-800/60 text-xs mt-4">
+            <span className="text-slate-550 dark:text-slate-400 font-medium">
+              Showing {data.length} of {totalCount} records
+            </span>
+            <div className="flex space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              >
+                Previous
+              </Button>
+              <span className="flex items-center px-3 font-bold text-slate-700 dark:text-slate-300">
+                Page {currentPage} of {Math.max(1, Math.ceil(totalCount / pageSize))}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage >= Math.ceil(totalCount / pageSize)}
+                onClick={() => setCurrentPage(prev => prev + 1)}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -204,6 +279,19 @@ export default function Finance() {
             value={formPayment.reference}
             onChange={(e) => setFormPayment({ ...formPayment, reference: e.target.value })}
           />
+
+          <div className="flex items-center space-x-2.5 py-1">
+            <input
+              type="checkbox"
+              id="isRefund"
+              className="h-4.5 w-4.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+              checked={formPayment.isRefund || false}
+              onChange={(e) => setFormPayment({ ...formPayment, isRefund: e.target.checked })}
+            />
+            <label htmlFor="isRefund" className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 cursor-pointer select-none">
+              This is a refund
+            </label>
+          </div>
 
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">Notes</label>

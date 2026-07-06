@@ -14,6 +14,17 @@ export default function Purchasing() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // Search & Filter States
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState('All');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
+  // Pagination States
+  const [totalCount, setTotalCount] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(25);
+
   // Dialog States
   const [openCreate, setOpenCreate] = useState(false);
   const [openReceive, setOpenReceive] = useState(false);
@@ -29,29 +40,88 @@ export default function Purchasing() {
   // Receive Form States
   const [receiveQuantities, setReceiveQuantities] = useState<{ [productId: number]: number }>({});
 
-  async function loadData() {
+  // Return States
+  const [purchaseReturns, setPurchaseReturns] = useState<any[]>([]);
+  const [loadingReturns, setLoadingReturns] = useState(false);
+  const [openReturn, setOpenReturn] = useState(false);
+  const [returnQuantities, setReturnQuantities] = useState<{ [productId: number]: number }>({});
+  const [returnNotes, setReturnNotes] = useState('');
+  const [submittingReturn, setSubmittingReturn] = useState(false);
+
+  async function loadOrders() {
     setLoading(true);
     setError('');
     try {
-      const [pos, sups, prods] = await Promise.all([
-        api.getPurchaseOrders(),
+      const result = await api.getPurchaseOrders({
+        page: currentPage,
+        pageSize: pageSize,
+        search: searchQuery || undefined,
+        status: filterStatus,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined
+      });
+      setOrders(result.items);
+      setTotalCount(result.totalCount);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load purchase orders');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadData() {
+    setError('');
+    try {
+      const [sups, prods] = await Promise.all([
         api.getSuppliers(),
         api.getProducts(),
       ]);
-      setOrders(pos);
       setSuppliers(sups);
       setProducts(prods.items);
       if (sups.length > 0) setSelectedSupplierId(sups[0].id!);
     } catch (err: any) {
       setError(err.message || 'Failed to load purchasing data');
-    } finally {
-      setLoading(false);
     }
   }
 
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (currentPage !== 1) {
+      setCurrentPage(1);
+    } else {
+      loadOrders();
+    }
+  }, [searchQuery, filterStatus, startDate, endDate]);
+
+  useEffect(() => {
+    loadOrders();
+  }, [currentPage]);
+
+  async function loadReturns() {
+    if (!selectedOrder) return;
+    setLoadingReturns(true);
+    try {
+      const data = await api.getPurchaseReturns({ purchaseOrderId: selectedOrder.id });
+      setPurchaseReturns(data);
+    } catch (e) {
+      console.error('Failed to load purchase returns', e);
+    } finally {
+      setLoadingReturns(false);
+    }
+  }
+
+  useEffect(() => {
+    if (selectedOrder && openDetails) {
+      loadReturns();
+    } else {
+      setPurchaseReturns([]);
+    }
+  }, [selectedOrder, openDetails]);
+
+  const totalReturned = purchaseReturns.reduce((sum, r) => sum + r.totalAmount, 0);
 
   const handleAddPoItem = () => {
     setPoItems([...poItems, { productId: products[0]?.id || 0, quantityOrdered: 1, costPrice: products[0]?.costPrice || 0 }]);
@@ -141,6 +211,37 @@ export default function Purchasing() {
         </div>
       )}
 
+      {/* Search & Filter Bar */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-50 dark:bg-slate-900/40 p-4 rounded-2xl border border-slate-200/50 dark:border-slate-800/60">
+        <Input
+          label="Search Purchase Order"
+          placeholder="PO # or Supplier Name..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+        <Select
+          label="Status"
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+        >
+          <option value="All">All Statuses</option>
+          <option value="Pending">Pending</option>
+          <option value="Received">Received</option>
+        </Select>
+        <Input
+          label="From Date"
+          type="date"
+          value={startDate}
+          onChange={(e) => setStartDate(e.target.value)}
+        />
+        <Input
+          label="To Date"
+          type="date"
+          value={endDate}
+          onChange={(e) => setEndDate(e.target.value)}
+        />
+      </div>
+
       {loading ? (
         <div className="flex h-[300px] items-center justify-center">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-650 border-t-transparent dark:border-indigo-400" />
@@ -203,12 +304,40 @@ export default function Purchasing() {
               {orders.length === 0 && (
                 <tr>
                   <td colSpan={5} className="py-12 text-center text-slate-400 font-medium">
-                    No Purchase Orders created yet.
+                    No purchase orders matching filters found.
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
+
+          {/* Pagination Controls */}
+          <div className="flex justify-between items-center bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200/50 dark:border-slate-800/60 text-xs mt-4">
+            <span className="text-slate-550 dark:text-slate-400 font-medium">
+              Showing {orders.length} of {totalCount} purchase orders
+            </span>
+            <div className="flex space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              >
+                Previous
+              </Button>
+              <span className="flex items-center px-3 font-bold text-slate-700 dark:text-slate-300">
+                Page {currentPage} of {Math.max(1, Math.ceil(totalCount / pageSize))}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage >= Math.ceil(totalCount / pageSize)}
+                onClick={() => setCurrentPage(prev => prev + 1)}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -404,10 +533,160 @@ export default function Purchasing() {
               </span>
             </div>
 
+            {/* Returns History Section */}
+            {selectedOrder.status === 'Received' && (
+              <div className="border-t border-slate-100 dark:border-slate-800 pt-4">
+                <div className="flex justify-between items-center mb-3">
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Returns History</p>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => {
+                      const initQties: { [productId: number]: number } = {};
+                      selectedOrder.items.forEach(item => {
+                        initQties[item.productId] = 0;
+                      });
+                      setReturnQuantities(initQties);
+                      setReturnNotes('');
+                      setOpenReturn(true);
+                    }}
+                    className="cursor-pointer"
+                  >
+                    <Plus size={14} className="mr-1" />
+                    <span>Record Return</span>
+                  </Button>
+                </div>
+
+                {loadingReturns ? (
+                  <p className="text-xs text-slate-400">Loading returns...</p>
+                ) : purchaseReturns.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic">No returns recorded yet.</p>
+                ) : (
+                  <div className="space-y-2 mb-3">
+                    <div className="max-h-[150px] overflow-y-auto pr-1 space-y-2">
+                      {purchaseReturns.map((r) => (
+                        <div key={r.id} className="flex justify-between items-center bg-slate-50 dark:bg-slate-950/20 border border-slate-200/40 dark:border-slate-800 rounded-xl p-2.5 text-xs">
+                          <div>
+                            <span className="font-bold text-slate-900 dark:text-slate-200">{r.returnNumber}</span>
+                            <span className="text-slate-400 mx-1.5">|</span>
+                            <span className="text-rose-600 dark:text-rose-400 font-bold">${(r.totalAmount ?? 0).toFixed(2)}</span>
+                            {r.notes && <span className="text-slate-400 ml-2">({r.notes})</span>}
+                          </div>
+                          <span className="text-slate-400 font-medium">{new Date(r.returnDate).toLocaleDateString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex justify-between text-xs font-bold pt-2.5 border-t border-slate-150 dark:border-slate-800">
+                      <span className="text-slate-400">Total Returned:</span>
+                      <span className="text-rose-600">${totalReturned.toFixed(2)}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="flex justify-end pt-4 border-t border-slate-100 dark:border-slate-800">
               <Button onClick={() => { setOpenDetails(false); setSelectedOrder(null); }}>Close</Button>
             </div>
           </div>
+        </Dialog>
+      )}
+
+      {/* Return Purchase Items Dialog */}
+      {selectedOrder && openReturn && (
+        <Dialog
+          open={openReturn}
+          onClose={() => setOpenReturn(false)}
+          title={`Return Items for Purchase Order: ${selectedOrder.orderNumber}`}
+          size="md"
+        >
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              const returnedItems = selectedOrder.items.map(item => {
+                const qty = returnQuantities[item.productId] ?? 0;
+                return {
+                  productId: item.productId,
+                  quantity: qty,
+                  costPrice: item.costPrice
+                };
+              }).filter(item => item.quantity > 0);
+
+              if (returnedItems.length === 0) {
+                alert('Please specify return quantity greater than zero for at least one product.');
+                return;
+              }
+
+              setSubmittingReturn(true);
+              try {
+                const totalAmount = returnedItems.reduce((sum, item) => sum + (item.quantity * item.costPrice), 0);
+                await api.createPurchaseReturn({
+                  supplierId: selectedOrder.supplierId,
+                  purchaseOrderId: selectedOrder.id,
+                  totalAmount,
+                  notes: returnNotes,
+                  items: returnedItems
+                });
+                setOpenReturn(false);
+                await loadReturns();
+                await loadData();
+              } catch (err: any) {
+                alert(err.message || 'Failed to record purchase return');
+              } finally {
+                setSubmittingReturn(false);
+              }
+            }}
+            className="space-y-6"
+          >
+            <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
+              {selectedOrder.items.map(item => {
+                const prevReturnedQty = purchaseReturns.reduce((sum, ret) => {
+                  const retItem = ret.items?.find((ri: any) => ri.productId === item.productId);
+                  return sum + (retItem?.quantity ?? 0);
+                }, 0);
+                const maxReturn = item.quantityReceived - prevReturnedQty;
+
+                return (
+                  <div key={item.productId} className="flex gap-4 items-center justify-between py-3 border-b border-slate-100 dark:border-slate-800/40">
+                    <div className="flex-1">
+                      <p className="font-bold text-slate-850 dark:text-slate-200">{item.product?.name}</p>
+                      <p className="text-xs text-slate-400 font-semibold mt-0.5">
+                        Received: {item.quantityReceived} | Already Returned: {prevReturnedQty}
+                      </p>
+                    </div>
+                    <div className="w-32">
+                      <Input
+                        label="Return Qty"
+                        type="number"
+                        min="0"
+                        max={maxReturn}
+                        step="0.01"
+                        value={returnQuantities[item.productId] ?? 0}
+                        onChange={(e) => setReturnQuantities({ ...returnQuantities, [item.productId]: parseFloat(e.target.value) || 0 })}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <Input
+              label="Return Notes"
+              placeholder="Reason for return, condition of items, etc."
+              value={returnNotes}
+              onChange={(e) => setReturnNotes(e.target.value)}
+            />
+
+            <div className="flex justify-end space-x-3 pt-5 border-t border-slate-100 dark:border-slate-800">
+              <Button type="button" variant="outline" onClick={() => setOpenReturn(false)} disabled={submittingReturn}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={submittingReturn}>
+                {submittingReturn ? 'Saving...' : 'Submit Return'}
+              </Button>
+            </div>
+          </form>
         </Dialog>
       )}
     </div>

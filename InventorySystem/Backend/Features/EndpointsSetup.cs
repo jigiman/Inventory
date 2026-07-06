@@ -126,12 +126,54 @@ public static class EndpointsSetup
         // =========================================================================
         // SALES
         // =========================================================================
-        app.MapGet("/api/sales", async (AppDbContext db) =>
-            await db.Sales
+        app.MapGet("/api/sales", async (
+            AppDbContext db,
+            int page = 1,
+            int pageSize = 50,
+            string? search = null,
+            string? status = null,
+            DateTime? startDate = null,
+            DateTime? endDate = null) =>
+        {
+            var query = db.Sales
                 .Include(s => s.Customer)
                 .Include(s => s.Items)
                     .ThenInclude(si => si.Product)
-                .ToListAsync());
+                .AsNoTracking()
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var sLower = search.ToLower();
+                query = query.Where(s => s.SaleNumber.ToLower().Contains(sLower) ||
+                                         (s.Customer != null && s.Customer.Name.ToLower().Contains(sLower)));
+            }
+
+            if (!string.IsNullOrWhiteSpace(status) && !status.Equals("All", StringComparison.OrdinalIgnoreCase))
+            {
+                query = query.Where(s => s.Status == status);
+            }
+
+            if (startDate != null)
+            {
+                query = query.Where(s => s.SaleDate >= startDate.Value);
+            }
+
+            if (endDate != null)
+            {
+                query = query.Where(s => s.SaleDate <= endDate.Value);
+            }
+
+            var totalCount = await query.CountAsync();
+            var items = await query
+                .OrderByDescending(s => s.SaleDate)
+                .ThenByDescending(s => s.Id)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return Results.Ok(new { totalCount, items, page, pageSize });
+        });
 
         app.MapPost("/api/sales", async (AppDbContext db, InventoryService invService, Sale sale) =>
         {
@@ -336,12 +378,54 @@ public static class EndpointsSetup
         // =========================================================================
         // PURCHASING
         // =========================================================================
-        app.MapGet("/api/purchase-orders", async (AppDbContext db) =>
-            await db.PurchaseOrders
+        app.MapGet("/api/purchase-orders", async (
+            AppDbContext db,
+            int page = 1,
+            int pageSize = 50,
+            string? search = null,
+            string? status = null,
+            DateTime? startDate = null,
+            DateTime? endDate = null) =>
+        {
+            var query = db.PurchaseOrders
                 .Include(po => po.Supplier)
                 .Include(po => po.Items)
                     .ThenInclude(pi => pi.Product)
-                .ToListAsync());
+                .AsNoTracking()
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var sLower = search.ToLower();
+                query = query.Where(po => po.OrderNumber.ToLower().Contains(sLower) ||
+                                         (po.Supplier != null && po.Supplier.Name.ToLower().Contains(sLower)));
+            }
+
+            if (!string.IsNullOrWhiteSpace(status) && !status.Equals("All", StringComparison.OrdinalIgnoreCase))
+            {
+                query = query.Where(po => po.Status == status);
+            }
+
+            if (startDate != null)
+            {
+                query = query.Where(po => po.OrderDate >= startDate.Value);
+            }
+
+            if (endDate != null)
+            {
+                query = query.Where(po => po.OrderDate <= endDate.Value);
+            }
+
+            var totalCount = await query.CountAsync();
+            var items = await query
+                .OrderByDescending(po => po.OrderDate)
+                .ThenByDescending(po => po.Id)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return Results.Ok(new { totalCount, items, page, pageSize });
+        });
 
         app.MapPost("/api/purchase-orders", async (AppDbContext db, PurchaseOrder po) =>
         {
@@ -529,62 +613,118 @@ public static class EndpointsSetup
         // =========================================================================
         // FINANCE & PAYMENTS
         // =========================================================================
-        app.MapGet("/api/finance/debtors", async (AppDbContext db) =>
+        app.MapGet("/api/finance/debtors", async (
+            AppDbContext db,
+            int page = 1,
+            int pageSize = 50,
+            string? search = null,
+            decimal? minBalance = null) =>
         {
             var sales = await db.Sales
                 .GroupBy(s => s.CustomerId)
                 .Select(g => new { CustomerId = g.Key, TotalSales = g.Sum(s => s.TotalAmount) })
                 .ToListAsync();
 
+            var returns = await db.SalesReturns
+                .GroupBy(r => r.CustomerId)
+                .Select(g => new { CustomerId = g.Key, TotalReturns = g.Sum(r => r.TotalAmount) })
+                .ToListAsync();
+
             var payments = await db.Payments
                 .Where(p => p.CustomerId != null)
                 .GroupBy(p => p.CustomerId)
-                .Select(g => new { CustomerId = g.Key.Value, TotalPaid = g.Sum(p => p.Amount) })
+                .Select(g => new { CustomerId = g.Key.Value, TotalPaid = g.Sum(p => p.IsRefund ? -p.Amount : p.Amount) })
                 .ToListAsync();
 
-            var customers = await db.Customers.ToListAsync();
+            var customersQuery = db.Customers.AsNoTracking().AsQueryable();
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var sLower = search.ToLower();
+                customersQuery = customersQuery.Where(c => c.Name.ToLower().Contains(sLower));
+            }
+
+            var customers = await customersQuery.ToListAsync();
 
             var report = customers.Select(c => {
                 var totalSales = sales.FirstOrDefault(s => s.CustomerId == c.Id)?.TotalSales ?? 0;
+                var totalReturns = returns.FirstOrDefault(r => r.CustomerId == c.Id)?.TotalReturns ?? 0;
                 var totalPaid = payments.FirstOrDefault(p => p.CustomerId == c.Id)?.TotalPaid ?? 0;
                 return new {
                     Customer = c,
                     TotalSales = totalSales,
+                    TotalReturns = totalReturns,
                     TotalPaid = totalPaid,
-                    Balance = totalSales - totalPaid
+                    Balance = totalSales - totalReturns - totalPaid
                 };
-            }).Where(r => r.Balance != 0).ToList();
+            }).Where(r => {
+                var matchesBalance = minBalance == null || Math.Abs(r.Balance) >= minBalance.Value;
+                return r.Balance != 0 && matchesBalance;
+            }).ToList();
 
-            return Results.Ok(report);
+            var totalCount = report.Count;
+            var items = report
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToList();
+
+            return Results.Ok(new { totalCount, items, page, pageSize });
         });
 
-        app.MapGet("/api/finance/creditors", async (AppDbContext db) =>
+        app.MapGet("/api/finance/creditors", async (
+            AppDbContext db,
+            int page = 1,
+            int pageSize = 50,
+            string? search = null,
+            decimal? minBalance = null) =>
         {
             var purchases = await db.PurchaseOrders
                 .GroupBy(po => po.SupplierId)
                 .Select(g => new { SupplierId = g.Key, TotalPurchases = g.Sum(po => po.TotalAmount) })
                 .ToListAsync();
 
+            var returns = await db.PurchaseReturns
+                .GroupBy(r => r.SupplierId)
+                .Select(g => new { SupplierId = g.Key, TotalReturns = g.Sum(r => r.TotalAmount) })
+                .ToListAsync();
+
             var payments = await db.Payments
                 .Where(p => p.SupplierId != null)
                 .GroupBy(p => p.SupplierId)
-                .Select(g => new { SupplierId = g.Key.Value, TotalPaid = g.Sum(p => p.Amount) })
+                .Select(g => new { SupplierId = g.Key.Value, TotalPaid = g.Sum(p => p.IsRefund ? -p.Amount : p.Amount) })
                 .ToListAsync();
 
-            var suppliers = await db.Suppliers.ToListAsync();
+            var suppliersQuery = db.Suppliers.AsNoTracking().AsQueryable();
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var sLower = search.ToLower();
+                suppliersQuery = suppliersQuery.Where(s => s.Name.ToLower().Contains(sLower));
+            }
+
+            var suppliers = await suppliersQuery.ToListAsync();
 
             var report = suppliers.Select(s => {
                 var totalPurchases = purchases.FirstOrDefault(p => p.SupplierId == s.Id)?.TotalPurchases ?? 0;
+                var totalReturns = returns.FirstOrDefault(r => r.SupplierId == s.Id)?.TotalReturns ?? 0;
                 var totalPaid = payments.FirstOrDefault(p => p.SupplierId == s.Id)?.TotalPaid ?? 0;
                 return new {
                     Supplier = s,
                     TotalPurchases = totalPurchases,
+                    TotalReturns = totalReturns,
                     TotalPaid = totalPaid,
-                    Balance = totalPurchases - totalPaid
+                    Balance = totalPurchases - totalReturns - totalPaid
                 };
-            }).Where(r => r.Balance != 0).ToList();
+            }).Where(r => {
+                var matchesBalance = minBalance == null || Math.Abs(r.Balance) >= minBalance.Value;
+                return r.Balance != 0 && matchesBalance;
+            }).ToList();
 
-            return Results.Ok(report);
+            var totalCount = report.Count;
+            var items = report
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToList();
+
+            return Results.Ok(new { totalCount, items, page, pageSize });
         });
 
         app.MapGet("/api/payments", async (AppDbContext db, int? saleId, int? purchaseOrderId) =>
@@ -609,6 +749,141 @@ public static class EndpointsSetup
         });
 
         // =========================================================================
+        // RETURNS
+        // =========================================================================
+        app.MapGet("/api/sales-returns", async (AppDbContext db, int? customerId, int? saleId) =>
+        {
+            var query = db.SalesReturns
+                .Include(sr => sr.Customer)
+                .Include(sr => sr.Sale)
+                .Include(sr => sr.Items)
+                    .ThenInclude(sri => sri.Product)
+                .AsQueryable();
+
+            if (customerId != null) query = query.Where(sr => sr.CustomerId == customerId);
+            if (saleId != null) query = query.Where(sr => sr.SaleId == saleId);
+
+            return await query.ToListAsync();
+        });
+
+        app.MapPost("/api/sales-returns", async (AppDbContext db, InventoryService invService, SalesReturn sr) =>
+        {
+            if (sr.CustomerId <= 0)
+                return Results.BadRequest("Customer is required");
+            if (sr.Items == null || sr.Items.Count == 0)
+                return Results.BadRequest("Return must contain at least one item");
+
+            sr.ReturnNumber = $"SR-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString()[..4].ToUpper()}";
+            sr.ReturnDate = DateTime.UtcNow;
+
+            if (sr.SaleId != null && sr.SaleId > 0)
+            {
+                var sale = await db.Sales.Include(s => s.Items).FirstOrDefaultAsync(s => s.Id == sr.SaleId);
+                if (sale == null)
+                    return Results.BadRequest("Associated sale not found");
+
+                var prevReturns = await db.SalesReturnItems
+                    .Where(ri => ri.SalesReturn!.SaleId == sr.SaleId)
+                    .GroupBy(ri => ri.ProductId)
+                    .Select(g => new { ProductId = g.Key, Qty = g.Sum(ri => ri.Quantity) })
+                    .ToDictionaryAsync(x => x.ProductId, x => x.Qty);
+
+                foreach (var item in sr.Items)
+                {
+                    var saleItem = sale.Items.FirstOrDefault(si => si.ProductId == item.ProductId);
+                    if (saleItem == null)
+                        return Results.BadRequest($"Product with ID {item.ProductId} was not part of the original sale");
+
+                    var prevQty = prevReturns.GetValueOrDefault(item.ProductId, 0);
+                    if (prevQty + item.Quantity > saleItem.Quantity)
+                        return Results.BadRequest($"Cannot return more than originally purchased. Purchased: {saleItem.Quantity}, Previously Returned: {prevQty}, Attempted: {item.Quantity}");
+                }
+            }
+
+            db.SalesReturns.Add(sr);
+
+            foreach (var item in sr.Items)
+            {
+                await invService.RecordTransactionAsync(
+                    item.ProductId,
+                    "Sales Return",
+                    item.Quantity,
+                    0,
+                    $"SR Ref: {sr.ReturnNumber}"
+                );
+            }
+
+            await db.SaveChangesAsync();
+            return Results.Created($"/api/sales-returns/{sr.Id}", sr);
+        });
+
+        app.MapGet("/api/purchase-returns", async (AppDbContext db, int? supplierId, int? purchaseOrderId) =>
+        {
+            var query = db.PurchaseReturns
+                .Include(pr => pr.Supplier)
+                .Include(pr => pr.PurchaseOrder)
+                .Include(pr => pr.Items)
+                    .ThenInclude(pri => pri.Product)
+                .AsQueryable();
+
+            if (supplierId != null) query = query.Where(pr => pr.SupplierId == supplierId);
+            if (purchaseOrderId != null) query = query.Where(pr => pr.PurchaseOrderId == purchaseOrderId);
+
+            return await query.ToListAsync();
+        });
+
+        app.MapPost("/api/purchase-returns", async (AppDbContext db, InventoryService invService, PurchaseReturn pr) =>
+        {
+            if (pr.SupplierId <= 0)
+                return Results.BadRequest("Supplier is required");
+            if (pr.Items == null || pr.Items.Count == 0)
+                return Results.BadRequest("Return must contain at least one item");
+
+            pr.ReturnNumber = $"PR-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString()[..4].ToUpper()}";
+            pr.ReturnDate = DateTime.UtcNow;
+
+            if (pr.PurchaseOrderId != null && pr.PurchaseOrderId > 0)
+            {
+                var po = await db.PurchaseOrders.Include(p => p.Items).FirstOrDefaultAsync(p => p.Id == pr.PurchaseOrderId);
+                if (po == null)
+                    return Results.BadRequest("Associated purchase order not found");
+
+                var prevReturns = await db.PurchaseReturnItems
+                    .Where(ri => ri.PurchaseReturn!.PurchaseOrderId == pr.PurchaseOrderId)
+                    .GroupBy(ri => ri.ProductId)
+                    .Select(g => new { ProductId = g.Key, Qty = g.Sum(ri => ri.Quantity) })
+                    .ToDictionaryAsync(x => x.ProductId, x => x.Qty);
+
+                foreach (var item in pr.Items)
+                {
+                    var poItem = po.Items.FirstOrDefault(pi => pi.ProductId == item.ProductId);
+                    if (poItem == null)
+                        return Results.BadRequest($"Product with ID {item.ProductId} was not part of the original purchase order");
+
+                    var prevQty = prevReturns.GetValueOrDefault(item.ProductId, 0);
+                    if (prevQty + item.Quantity > poItem.QuantityReceived)
+                        return Results.BadRequest($"Cannot return more than originally received. Received: {poItem.QuantityReceived}, Previously Returned: {prevQty}, Attempted: {item.Quantity}");
+                }
+            }
+
+            db.PurchaseReturns.Add(pr);
+
+            foreach (var item in pr.Items)
+            {
+                await invService.RecordTransactionAsync(
+                    item.ProductId,
+                    "Purchase Return",
+                    0,
+                    item.Quantity,
+                    $"PR Ref: {pr.ReturnNumber}"
+                );
+            }
+
+            await db.SaveChangesAsync();
+            return Results.Created($"/api/purchase-returns/{pr.Id}", pr);
+        });
+
+        // =========================================================================
         // REPORTS & DASHBOARD
         // =========================================================================
         app.MapGet("/api/reports/dashboard", async (AppDbContext db) =>
@@ -623,18 +898,20 @@ public static class EndpointsSetup
             var debtorBalances = await db.Customers
                 .Select(c => new {
                     SalesTotal = db.Sales.Where(s => s.CustomerId == c.Id).Sum(s => s.TotalAmount),
-                    PaymentsTotal = db.Payments.Where(p => p.CustomerId == c.Id).Sum(p => p.Amount)
+                    ReturnsTotal = db.SalesReturns.Where(r => r.CustomerId == c.Id).Sum(r => r.TotalAmount),
+                    PaymentsTotal = db.Payments.Where(p => p.CustomerId == c.Id).Sum(p => p.IsRefund ? -p.Amount : p.Amount)
                 })
                 .ToListAsync();
-            var totalDebtors = debtorBalances.Sum(x => Math.Max(0, x.SalesTotal - x.PaymentsTotal));
+            var totalDebtors = debtorBalances.Sum(x => Math.Max(0, x.SalesTotal - x.ReturnsTotal - x.PaymentsTotal));
 
             var creditorBalances = await db.Suppliers
                 .Select(s => new {
                     PurchasesTotal = db.PurchaseOrders.Where(po => po.SupplierId == s.Id).Sum(po => po.TotalAmount),
-                    PaymentsTotal = db.Payments.Where(p => p.SupplierId == s.Id).Sum(p => p.Amount)
+                    ReturnsTotal = db.PurchaseReturns.Where(r => r.SupplierId == s.Id).Sum(r => r.TotalAmount),
+                    PaymentsTotal = db.Payments.Where(p => p.SupplierId == s.Id).Sum(p => p.IsRefund ? -p.Amount : p.Amount)
                 })
                 .ToListAsync();
-            var totalCreditors = creditorBalances.Sum(x => Math.Max(0, x.PurchasesTotal - x.PaymentsTotal));
+            var totalCreditors = creditorBalances.Sum(x => Math.Max(0, x.PurchasesTotal - x.ReturnsTotal - x.PaymentsTotal));
 
             var recentTransactions = await db.StockTransactions
                 .Include(t => t.Product)
@@ -868,31 +1145,38 @@ public static class EndpointsSetup
             else if (type == "DebtorsReport")
             {
                 title = "Debtors Balance Report";
-                headers = new List<string> { "Customer Name", "Total Sales", "Total Paid", "Outstanding Balance" };
+                headers = new List<string> { "Customer Name", "Total Sales", "Total Returns", "Total Paid", "Outstanding Balance" };
                 var sales = await db.Sales
                     .GroupBy(s => s.CustomerId)
                     .Select(g => new { CustomerId = g.Key, TotalSales = g.Sum(s => s.TotalAmount) })
                     .ToListAsync();
+                var returns = await db.SalesReturns
+                    .GroupBy(r => r.CustomerId)
+                    .Select(g => new { CustomerId = g.Key, TotalReturns = g.Sum(r => r.TotalAmount) })
+                    .ToListAsync();
                 var payments = await db.Payments
                     .Where(p => p.CustomerId != null)
                     .GroupBy(p => p.CustomerId)
-                    .Select(g => new { CustomerId = g.Key.Value, TotalPaid = g.Sum(p => p.Amount) })
+                    .Select(g => new { CustomerId = g.Key.Value, TotalPaid = g.Sum(p => p.IsRefund ? -p.Amount : p.Amount) })
                     .ToListAsync();
                 var customers = await db.Customers.ToListAsync();
                 var list = customers.Select(c => {
                     var totalSales = sales.FirstOrDefault(s => s.CustomerId == c.Id)?.TotalSales ?? 0;
+                    var totalReturns = returns.FirstOrDefault(r => r.CustomerId == c.Id)?.TotalReturns ?? 0;
                     var totalPaid = payments.FirstOrDefault(p => p.CustomerId == c.Id)?.TotalPaid ?? 0;
                     return new {
                         Name = c.Name,
                         TotalSales = totalSales,
+                        TotalReturns = totalReturns,
                         TotalPaid = totalPaid,
-                        Balance = totalSales - totalPaid
+                        Balance = totalSales - totalReturns - totalPaid
                     };
                 }).Where(r => r.Balance != 0).ToList();
                 rows = list.Select(r => new List<string>
                 {
                     r.Name,
                     r.TotalSales.ToString("F2"),
+                    r.TotalReturns.ToString("F2"),
                     r.TotalPaid.ToString("F2"),
                     r.Balance.ToString("F2")
                 }).ToList();
@@ -900,31 +1184,38 @@ public static class EndpointsSetup
             else if (type == "CreditorsReport")
             {
                 title = "Creditors Balance Report";
-                headers = new List<string> { "Supplier Name", "Total Purchases", "Total Paid", "Outstanding Balance" };
+                headers = new List<string> { "Supplier Name", "Total Purchases", "Total Returns", "Total Paid", "Outstanding Balance" };
                 var purchases = await db.PurchaseOrders
                     .GroupBy(po => po.SupplierId)
                     .Select(g => new { SupplierId = g.Key, TotalPurchases = g.Sum(po => po.TotalAmount) })
                     .ToListAsync();
+                var returns = await db.PurchaseReturns
+                    .GroupBy(r => r.SupplierId)
+                    .Select(g => new { SupplierId = g.Key, TotalReturns = g.Sum(r => r.TotalAmount) })
+                    .ToListAsync();
                 var payments = await db.Payments
                     .Where(p => p.SupplierId != null)
                     .GroupBy(p => p.SupplierId)
-                    .Select(g => new { SupplierId = g.Key.Value, TotalPaid = g.Sum(p => p.Amount) })
+                    .Select(g => new { SupplierId = g.Key.Value, TotalPaid = g.Sum(p => p.IsRefund ? -p.Amount : p.Amount) })
                     .ToListAsync();
                 var suppliers = await db.Suppliers.ToListAsync();
                 var list = suppliers.Select(s => {
                     var totalPurchases = purchases.FirstOrDefault(p => p.SupplierId == s.Id)?.TotalPurchases ?? 0;
+                    var totalReturns = returns.FirstOrDefault(r => r.SupplierId == s.Id)?.TotalReturns ?? 0;
                     var totalPaid = payments.FirstOrDefault(p => p.SupplierId == s.Id)?.TotalPaid ?? 0;
                     return new {
                         Name = s.Name,
                         TotalPurchases = totalPurchases,
+                        TotalReturns = totalReturns,
                         TotalPaid = totalPaid,
-                        Balance = totalPurchases - totalPaid
+                        Balance = totalPurchases - totalReturns - totalPaid
                     };
                 }).Where(r => r.Balance != 0).ToList();
                 rows = list.Select(r => new List<string>
                 {
                     r.Name,
                     r.TotalPurchases.ToString("F2"),
+                    r.TotalReturns.ToString("F2"),
                     r.TotalPaid.ToString("F2"),
                     r.Balance.ToString("F2")
                 }).ToList();

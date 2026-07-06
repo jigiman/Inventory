@@ -149,6 +149,51 @@ export interface Payment {
   supplierId?: number;
   saleId?: number;
   purchaseOrderId?: number;
+  isRefund?: boolean;
+}
+
+export interface SalesReturnItem {
+  id?: number;
+  salesReturnId?: number;
+  productId: number;
+  product?: Product;
+  quantity: number;
+  unitPrice: number;
+}
+
+export interface SalesReturn {
+  id?: number;
+  returnNumber?: string;
+  customerId: number;
+  customer?: Customer;
+  saleId?: number;
+  sale?: Sale;
+  returnDate?: string;
+  totalAmount: number;
+  notes: string;
+  items: SalesReturnItem[];
+}
+
+export interface PurchaseReturnItem {
+  id?: number;
+  purchaseReturnId?: number;
+  productId: number;
+  product?: Product;
+  quantity: number;
+  costPrice: number;
+}
+
+export interface PurchaseReturn {
+  id?: number;
+  returnNumber?: string;
+  supplierId: number;
+  supplier?: Supplier;
+  purchaseOrderId?: number;
+  purchaseOrder?: PurchaseOrder;
+  returnDate?: string;
+  totalAmount: number;
+  notes: string;
+  items: PurchaseReturnItem[];
 }
 
 export interface FinanceReportItem {
@@ -156,6 +201,7 @@ export interface FinanceReportItem {
   supplier?: Supplier;
   totalSales?: number;
   totalPurchases?: number;
+  totalReturns?: number;
   totalPaid: number;
   balance: number;
 }
@@ -255,18 +301,90 @@ export const api = {
   deleteProduct: (id: number) => request<void>(`/api/products/${id}`, { method: 'DELETE' }),
 
   // Purchase Orders
-  getPurchaseOrders: () => request<PurchaseOrder[]>('/api/purchase-orders'),
+  getPurchaseOrders: (params?: { page?: number; pageSize?: number; search?: string; status?: string; startDate?: string; endDate?: string }) => {
+    let url = '/api/purchase-orders';
+    if (params) {
+      const q = new URLSearchParams();
+      if (params.page) q.append('page', params.page.toString());
+      if (params.pageSize) q.append('pageSize', params.pageSize.toString());
+      if (params.search) q.append('search', params.search);
+      if (params.status) q.append('status', params.status);
+      if (params.startDate) q.append('startDate', params.startDate);
+      if (params.endDate) q.append('endDate', params.endDate);
+      url += '?' + q.toString();
+    }
+    return request<PaginatedResult<PurchaseOrder>>(url);
+  },
   createPurchaseOrder: (po: PurchaseOrder) => request<PurchaseOrder>('/api/purchase-orders', { method: 'POST', body: JSON.stringify(po) }),
   receivePurchaseOrder: (id: number, items: { productId: number; quantityReceived: number }[]) =>
     request<PurchaseOrder>(`/api/purchase-orders/${id}/receive`, { method: 'POST', body: JSON.stringify(items) }),
 
   // Sales
-  getSales: () => request<Sale[]>('/api/sales'),
+  getSales: (params?: { page?: number; pageSize?: number; search?: string; status?: string; startDate?: string; endDate?: string }) => {
+    let url = '/api/sales';
+    if (params) {
+      const q = new URLSearchParams();
+      if (params.page) q.append('page', params.page.toString());
+      if (params.pageSize) q.append('pageSize', params.pageSize.toString());
+      if (params.search) q.append('search', params.search);
+      if (params.status) q.append('status', params.status);
+      if (params.startDate) q.append('startDate', params.startDate);
+      if (params.endDate) q.append('endDate', params.endDate);
+      url += '?' + q.toString();
+    }
+    return request<PaginatedResult<Sale>>(url);
+  },
   createSale: (sale: Sale) => request<Sale>('/api/sales', { method: 'POST', body: JSON.stringify(sale) }),
 
+  // Returns
+  getSalesReturns: (params?: { customerId?: number; saleId?: number }) => {
+    let url = '/api/sales-returns';
+    if (params) {
+      const q = new URLSearchParams();
+      if (params.customerId) q.append('customerId', params.customerId.toString());
+      if (params.saleId) q.append('saleId', params.saleId.toString());
+      url += '?' + q.toString();
+    }
+    return request<SalesReturn[]>(url);
+  },
+  createSalesReturn: (sr: SalesReturn) => request<SalesReturn>('/api/sales-returns', { method: 'POST', body: JSON.stringify(sr) }),
+  getPurchaseReturns: (params?: { supplierId?: number; purchaseOrderId?: number }) => {
+    let url = '/api/purchase-returns';
+    if (params) {
+      const q = new URLSearchParams();
+      if (params.supplierId) q.append('supplierId', params.supplierId.toString());
+      if (params.purchaseOrderId) q.append('purchaseOrderId', params.purchaseOrderId.toString());
+      url += '?' + q.toString();
+    }
+    return request<PurchaseReturn[]>(url);
+  },
+  createPurchaseReturn: (pr: PurchaseReturn) => request<PurchaseReturn>('/api/purchase-returns', { method: 'POST', body: JSON.stringify(pr) }),
+
   // Finance & Payments
-  getDebtors: () => request<FinanceReportItem[]>('/api/finance/debtors'),
-  getCreditors: () => request<FinanceReportItem[]>('/api/finance/creditors'),
+  getDebtors: (params?: { page?: number; pageSize?: number; search?: string; minBalance?: number }) => {
+    let url = '/api/finance/debtors';
+    if (params) {
+      const q = new URLSearchParams();
+      if (params.page) q.append('page', params.page.toString());
+      if (params.pageSize) q.append('pageSize', params.pageSize.toString());
+      if (params.search) q.append('search', params.search);
+      if (params.minBalance !== undefined) q.append('minBalance', params.minBalance.toString());
+      url += '?' + q.toString();
+    }
+    return request<PaginatedResult<FinanceReportItem>>(url);
+  },
+  getCreditors: (params?: { page?: number; pageSize?: number; search?: string; minBalance?: number }) => {
+    let url = '/api/finance/creditors';
+    if (params) {
+      const q = new URLSearchParams();
+      if (params.page) q.append('page', params.page.toString());
+      if (params.pageSize) q.append('pageSize', params.pageSize.toString());
+      if (params.search) q.append('search', params.search);
+      if (params.minBalance !== undefined) q.append('minBalance', params.minBalance.toString());
+      url += '?' + q.toString();
+    }
+    return request<PaginatedResult<FinanceReportItem>>(url);
+  },
   recordPayment: (payment: Payment) => request<Payment>('/api/payments', { method: 'POST', body: JSON.stringify(payment) }),
   getPayments: (params?: { saleId?: number; purchaseOrderId?: number }) => {
     let url = '/api/payments';
