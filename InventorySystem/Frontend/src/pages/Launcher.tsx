@@ -37,6 +37,11 @@ export default function Launcher({ recentDatabases, onReady, theme, onThemeChang
   // "New database" form
   const [newPath, setNewPath] = useState('');
   const [newName, setNewName] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+
+  // "Open with password" (if needed)
+  const [selectedDbPath, setSelectedDbPath] = useState<string | null>(null);
+  const [openPassword, setOpenPassword] = useState('');
 
   // "Open other" (manual path fallback for dev mode)
   const [openPath, setOpenPath] = useState('');
@@ -44,15 +49,21 @@ export default function Launcher({ recentDatabases, onReady, theme, onThemeChang
 
   // ── actions ────────────────────────────────────────────────────────────────
 
-  const handleOpen = async (path: string) => {
+  const handleOpen = async (path: string, password?: string) => {
     if (!path.trim()) return;
     setLoading(true);
     setError('');
     try {
-      await api.openDatabase(path.trim());
+      await api.openDatabase(path.trim(), password);
       onReady();
     } catch (e: any) {
-      setError(e.message || 'Failed to open database.');
+      const msg = e.message || '';
+      if (msg.includes('file is not a database') || msg.includes('authentication') || msg.includes('password')) {
+        setSelectedDbPath(path);
+        setError('Database is encrypted. Please provide the password.');
+      } else {
+        setError(e.message || 'Failed to open database.');
+      }
     } finally {
       setLoading(false);
     }
@@ -76,7 +87,7 @@ export default function Launcher({ recentDatabases, onReady, theme, onThemeChang
     setLoading(true);
     setError('');
     try {
-      await api.createDatabase(newPath.trim(), newName.trim() || undefined);
+      await api.createDatabase(newPath.trim(), newName.trim() || undefined, newPassword.trim() || undefined);
       onReady();
     } catch (e: any) {
       setError(e.message || 'Failed to create database.');
@@ -152,6 +163,33 @@ export default function Launcher({ recentDatabases, onReady, theme, onThemeChang
             {/* ── Recent tab ──────────────────────────────────────────────────── */}
             {tab === 'recent' && (
               <div className="space-y-3">
+                {/* Password prompt for encrypted DB */}
+                {selectedDbPath && (
+                  <div className="mb-6 rounded-2xl border border-indigo-500/30 bg-indigo-500/5 p-5 animate-in slide-in-from-top-2">
+                    <p className="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                      <Database size={16} className="text-indigo-500" />
+                      Enter password for: <span className="text-indigo-600 dark:text-indigo-400">{selectedDbPath.split(/[\\/]/).pop()}</span>
+                    </p>
+                    <div className="flex gap-2">
+                      <Input
+                        type="password"
+                        placeholder="Database password"
+                        value={openPassword}
+                        onChange={e => setOpenPassword(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && handleOpen(selectedDbPath, openPassword)}
+                        className="flex-1"
+                        autoFocus
+                      />
+                      <Button onClick={() => handleOpen(selectedDbPath, openPassword)} disabled={loading}>
+                        {loading ? <Loader2 size={16} className="animate-spin" /> : 'Unlock'}
+                      </Button>
+                      <Button variant="outline" onClick={() => { setSelectedDbPath(null); setOpenPassword(''); setError(''); }}>
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
                 {recentDatabases.length === 0 ? (
                   <p className="py-6 text-center text-sm text-slate-555 dark:text-slate-500">No recent databases found.</p>
                 ) : (
@@ -159,7 +197,7 @@ export default function Launcher({ recentDatabases, onReady, theme, onThemeChang
                     <button
                       key={db.path}
                       onClick={() => handleOpen(db.path)}
-                      disabled={loading}
+                      disabled={loading || !!selectedDbPath}
                       className="group flex w-full items-center gap-4 rounded-2xl border border-slate-200/60 dark:border-white/8 bg-white/40 dark:bg-white/5 p-4 text-left transition-all duration-200 hover:border-indigo-500/40 hover:bg-indigo-55/40 dark:hover:bg-indigo-500/10 disabled:opacity-50 cursor-pointer"
                     >
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-500/20 text-indigo-650 dark:text-indigo-400 group-hover:bg-indigo-500/30 transition-colors">
@@ -267,6 +305,14 @@ export default function Launcher({ recentDatabases, onReady, theme, onThemeChang
                   placeholder="My Store"
                   value={newName}
                   onChange={e => setNewName(e.target.value)}
+                />
+
+                <Input
+                  label="Encryption password (optional)"
+                  placeholder="Enter a strong password to encrypt the database"
+                  type="password"
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleCreate()}
                 />
 
