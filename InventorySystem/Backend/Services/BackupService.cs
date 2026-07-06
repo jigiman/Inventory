@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.IO.Compression;
+using System.Security.Cryptography;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Backend.Data;
@@ -9,10 +11,14 @@ namespace Backend.Services;
 public class BackupService
 {
     private readonly AppDbContext _context;
+    private readonly DatabaseState _dbState;
+    private readonly CloudSyncService _syncService;
 
-    public BackupService(AppDbContext context)
+    public BackupService(AppDbContext context, DatabaseState dbState, CloudSyncService syncService)
     {
         _context = context;
+        _dbState = dbState;
+        _syncService = syncService;
     }
 
     public string GetDatabaseFilePath()
@@ -32,19 +38,70 @@ public class BackupService
         var backupsDir = Path.Combine(appDataPath, "Backups");
         Directory.CreateDirectory(backupsDir);
 
-        var backupFileName = $"backup_{DateTime.UtcNow:yyyyMMdd_HHmmss}.db";
-        var backupPath = Path.Combine(backupsDir, backupFileName);
+        var timestamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
+        var tempDbPath = Path.Combine(backupsDir, $"temp_db_{timestamp}.db");
 
-        if (File.Exists(backupPath))
-            File.Delete(backupPath);
-
-        // Perform safe online SQLite backup using VACUUM INTO
-        var escapedPath = backupPath.Replace("'", "''");
+        // 1. Perform safe online SQLite backup using VACUUM INTO
+        var escapedPath = tempDbPath.Replace("'", "''");
 #pragma warning disable EF1002
         await _context.Database.ExecuteSqlRawAsync($"VACUUM INTO '{escapedPath}'");
 #pragma warning restore EF1002
 
-        return backupPath;
+        // 2. Compress the DB backup and Images directory
+        var tempZipPath = Path.Combine(backupsDir, $"temp_zip_{timestamp}.zip");
+        try
+        {
+            using (var fs = new FileStream(tempZipPath, FileMode.Create))
+            using (var archive = new ZipArchive(fs, ZipArchiveMode.Create))
+            {
+                archive.CreateEntryFromFile(tempDbPath, "database.db");
+
+                var imagesDir = Path.Combine(appDataPath, "Images");
+                if (Directory.Exists(imagesDir))
+                {
+                    var imageFiles = Directory.GetFiles(imagesDir, "*", SearchOption.AllDirectories);
+                    foreach (var imgFile in imageFiles)
+                    {
+                        var relativePath = Path.GetRelativePath(appDataPath, imgFile);
+                        archive.CreateEntryFromFile(imgFile, relativePath);
+                    }
+                }
+            }
+        }
+        finally
+        {
+            if (File.Exists(tempDbPath))
+                File.Delete(tempDbPath);
+        }
+
+        // 3. Encrypt if database has a password
+        string finalBackupPath;
+        var password = _dbState.Password;
+        if (!string.IsNullOrEmpty(password))
+        {
+            var encryptedBackupPath = Path.Combine(backupsDir, $"backup_{timestamp}.bak");
+            try
+            {
+                EncryptFile(tempZipPath, encryptedBackupPath, password);
+                finalBackupPath = encryptedBackupPath;
+            }
+            finally
+            {
+                if (File.Exists(tempZipPath))
+                    File.Delete(tempZipPath);
+            }
+        }
+        else
+        {
+            var plainBackupPath = Path.Combine(backupsDir, $"backup_{timestamp}.zip");
+            File.Move(tempZipPath, plainBackupPath, overwrite: true);
+            finalBackupPath = plainBackupPath;
+        }
+
+        // Sync backup to cloud folder if configured
+        await _syncService.SyncBackupAsync(finalBackupPath);
+
+        return finalBackupPath;
     }
 
     public async Task RestoreBackupAsync(string backupFileName)
@@ -61,11 +118,99 @@ public class BackupService
         if (!File.Exists(backupPath))
             throw new FileNotFoundException("Backup file not found", backupPath);
 
-        // Close connection and copy over dbPath
-        await _context.Database.CloseConnectionAsync();
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
+        var tempZipPath = Path.Combine(appDataPath, "Backups", $"temp_restore_{Guid.NewGuid()}.zip");
+        var isEncrypted = backupFileName.EndsWith(".bak", StringComparison.OrdinalIgnoreCase);
 
-        File.Copy(backupPath, dbPath, overwrite: true);
+        if (isEncrypted)
+        {
+            var password = _dbState.Password;
+            if (string.IsNullOrEmpty(password))
+                throw new InvalidOperationException("Cannot decrypt backup. Database password is not set.");
+
+            DecryptFile(backupPath, tempZipPath, password);
+        }
+        else
+        {
+            File.Copy(backupPath, tempZipPath);
+        }
+
+        try
+        {
+            // Close connection and copy over dbPath
+            await _context.Database.CloseConnectionAsync();
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+
+            using (var fs = new FileStream(tempZipPath, FileMode.Open))
+            using (var archive = new ZipArchive(fs, ZipArchiveMode.Read))
+            {
+                // Extract database
+                var dbEntry = archive.GetEntry("database.db");
+                if (dbEntry != null)
+                {
+                    dbEntry.ExtractToFile(dbPath, overwrite: true);
+                }
+
+                // Extract images
+                foreach (var entry in archive.Entries)
+                {
+                    if (entry.FullName.StartsWith("Images/", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var targetPath = Path.Combine(appDataPath, entry.FullName);
+                        var targetDir = Path.GetDirectoryName(targetPath);
+                        if (!string.IsNullOrEmpty(targetDir))
+                            Directory.CreateDirectory(targetDir);
+                        
+                        entry.ExtractToFile(targetPath, overwrite: true);
+                    }
+                }
+            }
+        }
+        finally
+        {
+            if (File.Exists(tempZipPath))
+                File.Delete(tempZipPath);
+        }
+    }
+
+    private static void EncryptFile(string inputPath, string outputPath, string password)
+    {
+        byte[] salt = RandomNumberGenerator.GetBytes(16);
+        byte[] key = Rfc2898DeriveBytes.Pbkdf2(password, salt, 100000, HashAlgorithmName.SHA256, 32);
+        byte[] iv = Rfc2898DeriveBytes.Pbkdf2(password, salt, 100000, HashAlgorithmName.SHA256, 16);
+
+        using var aes = Aes.Create();
+        aes.Key = key;
+        aes.IV = iv;
+
+        using var outFs = new FileStream(outputPath, FileMode.Create);
+        outFs.Write(salt, 0, salt.Length);
+        outFs.Write(iv, 0, iv.Length);
+
+        using var encryptor = aes.CreateEncryptor();
+        using var cryptoStream = new CryptoStream(outFs, encryptor, CryptoStreamMode.Write);
+        using var inFs = new FileStream(inputPath, FileMode.Open);
+        inFs.CopyTo(cryptoStream);
+    }
+
+    private static void DecryptFile(string inputPath, string outputPath, string password)
+    {
+        using var inFs = new FileStream(inputPath, FileMode.Open);
+        byte[] salt = new byte[16];
+        byte[] iv = new byte[16];
+
+        if (inFs.Read(salt, 0, salt.Length) != salt.Length || inFs.Read(iv, 0, iv.Length) != iv.Length)
+            throw new InvalidDataException("Invalid backup file structure.");
+
+        byte[] key = Rfc2898DeriveBytes.Pbkdf2(password, salt, 100000, HashAlgorithmName.SHA256, 32);
+
+        using var aes = Aes.Create();
+        aes.Key = key;
+        aes.IV = iv;
+
+        using var decryptor = aes.CreateDecryptor();
+        using var cryptoStream = new CryptoStream(inFs, decryptor, CryptoStreamMode.Read);
+        using var outFs = new FileStream(outputPath, FileMode.Create);
+        cryptoStream.CopyTo(outFs);
     }
 }

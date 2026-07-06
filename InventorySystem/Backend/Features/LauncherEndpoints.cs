@@ -60,8 +60,15 @@ public static class LauncherEndpoints
             if (!File.Exists(path))
                 return Results.BadRequest($"Database file not found: {path}");
 
+            // Try to load saved credential if password is not provided
+            var password = req.Password;
+            if (string.IsNullOrEmpty(password))
+            {
+                password = CredentialManager.GetCredential(path);
+            }
+
             dbState.DbPath = path;
-            dbState.Password = req.Password;
+            dbState.Password = password;
 
             try
             {
@@ -73,6 +80,12 @@ public static class LauncherEndpoints
                 dbState.Password = null;
                 Log.Error(ex, "Failed to open database: {Path}", path);
                 return Results.Problem($"Failed to open database: {ex.Message}");
+            }
+
+            // Save the credential if it was successfully unlocked and a password was used
+            if (!string.IsNullOrEmpty(password))
+            {
+                CredentialManager.SaveCredential(path, password);
             }
 
             var config = LauncherConfig.Load();
@@ -131,6 +144,12 @@ public static class LauncherEndpoints
                 dbState.Password = null;
                 Log.Error(ex, "Failed to create database: {Path}", path);
                 return Results.Problem($"Failed to create database: {ex.Message}");
+            }
+
+            // Save the credential if database is successfully created with a password
+            if (!string.IsNullOrEmpty(req.Password))
+            {
+                CredentialManager.SaveCredential(path, req.Password);
             }
 
             var config = LauncherConfig.Load();
@@ -214,6 +233,40 @@ public static class LauncherEndpoints
         // Enable write-ahead logging and safe normal synchronizations for durability
         await db.Database.ExecuteSqlRawAsync("PRAGMA journal_mode = WAL;");
         await db.Database.ExecuteSqlRawAsync("PRAGMA synchronous = NORMAL;");
+
+        // Periodic database maintenance check
+        try
+        {
+            var lastMaintSetting = await db.Settings.FirstOrDefaultAsync(s => s.Key == "LastMaintenanceDate");
+            bool runMaintenance = false;
+            DateTime now = DateTime.UtcNow;
+
+            if (lastMaintSetting == null)
+            {
+                runMaintenance = true;
+                lastMaintSetting = new Models.Setting { Key = "LastMaintenanceDate", Value = now.ToString("o") };
+                db.Settings.Add(lastMaintSetting);
+                await db.SaveChangesAsync();
+            }
+            else if (DateTime.TryParse(lastMaintSetting.Value, out var lastMaintDate) && (now - lastMaintDate).TotalDays >= 7)
+            {
+                runMaintenance = true;
+                lastMaintSetting.Value = now.ToString("o");
+                await db.SaveChangesAsync();
+            }
+
+            if (runMaintenance)
+            {
+                Log.Information("Running scheduled database maintenance (VACUUM & ANALYZE)...");
+                // Note: VACUUM cannot run within a transaction, so we make sure we are clean.
+                await db.Database.ExecuteSqlRawAsync("VACUUM;");
+                await db.Database.ExecuteSqlRawAsync("ANALYZE;");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to run periodic database maintenance check (non-fatal).");
+        }
 
         if (seed)
         {

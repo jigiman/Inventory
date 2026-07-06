@@ -59,10 +59,14 @@ public class Program
         {
             var state = sp.GetRequiredService<DatabaseState>();
             if (state.IsInitialized)
-                options.UseSqlite(state.ConnectionString);
+            {
+                options.UseSqlite(state.ConnectionString)
+                       .AddInterceptors(new SqliteImmediateTransactionInterceptor());
+            }
         });
 
         // ── Core services ─────────────────────────────────────────────────────
+        builder.Services.AddScoped<CloudSyncService>();
         builder.Services.AddScoped<InventoryService>();
         builder.Services.AddScoped<BackupService>();
         builder.Services.AddScoped<ExportService>();

@@ -4,6 +4,7 @@ using Xunit;
 using Backend.Services;
 using Microsoft.EntityFrameworkCore;
 using Backend.Data;
+using Backend.Models;
 using System.Threading.Tasks;
 
 namespace Security.Tests;
@@ -18,7 +19,9 @@ public class SecurityTests
             .UseSqlite("Data Source=:memory:")
             .Options;
         using var context = new AppDbContext(options);
-        var service = new BackupService(context);
+        var dbState = new DatabaseState();
+        var syncService = new CloudSyncService(context);
+        var service = new BackupService(context, dbState, syncService);
 
         // Act & Assert
         await Assert.ThrowsAsync<ArgumentException>(() => service.RestoreBackupAsync("../traversal.db"));
@@ -101,6 +104,100 @@ public class SecurityTests
         {
             if (File.Exists(dbPath)) File.Delete(dbPath);
             if (File.Exists(backupPath)) File.Delete(backupPath);
+        }
+    }
+
+    [Fact]
+    public void CredentialManager_Save_Get_Delete_Succeeds()
+    {
+        if (!OperatingSystem.IsMacOS() && !OperatingSystem.IsWindows())
+            return;
+
+        var tempPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".db");
+        var testPassword = "MySuperSecretPassword123!";
+
+        try
+        {
+            var saved = CredentialManager.SaveCredential(tempPath, testPassword);
+            Assert.True(saved);
+
+            var retrieved = CredentialManager.GetCredential(tempPath);
+            Assert.Equal(testPassword, retrieved);
+
+            var deleted = CredentialManager.DeleteCredential(tempPath);
+            Assert.True(deleted);
+
+            var retrievedPostDelete = CredentialManager.GetCredential(tempPath);
+            Assert.Null(retrievedPostDelete);
+        }
+        finally
+        {
+            CredentialManager.DeleteCredential(tempPath);
+        }
+    }
+
+    [Fact]
+    public async Task BackupService_EncryptedBackup_And_Restore_Succeeds()
+    {
+        var dbPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".db");
+        var password = "test-backup-password";
+
+        if (File.Exists(dbPath)) File.Delete(dbPath);
+
+        try
+        {
+            var dbState = new DatabaseState
+            {
+                DbPath = dbPath,
+                Password = password
+            };
+
+            var options = new DbContextOptionsBuilder<AppDbContext>()
+                .UseSqlite(dbState.ConnectionString)
+                .Options;
+
+            using (var context = new AppDbContext(options))
+            {
+                await context.Database.EnsureCreatedAsync();
+                context.Settings.Add(new Setting { Key = "TestKey", Value = "TestValue" });
+                await context.SaveChangesAsync();
+            }
+
+            string backupFile;
+            using (var context = new AppDbContext(options))
+            {
+                var syncService = new CloudSyncService(context);
+                var backupService = new BackupService(context, dbState, syncService);
+                backupFile = await backupService.CreateBackupAsync();
+                
+                Assert.True(File.Exists(backupFile));
+                Assert.EndsWith(".bak", backupFile);
+                await context.Database.CloseConnectionAsync();
+            }
+
+            File.Delete(dbPath);
+
+            using (var context = new AppDbContext(options))
+            {
+                var syncService = new CloudSyncService(context);
+                var backupService = new BackupService(context, dbState, syncService);
+                var backupFileName = Path.GetFileName(backupFile);
+                
+                await backupService.RestoreBackupAsync(backupFileName);
+
+                var setting = await context.Settings.FirstOrDefaultAsync(s => s.Key == "TestKey");
+                Assert.NotNull(setting);
+                Assert.Equal("TestValue", setting.Value);
+            }
+
+            if (File.Exists(backupFile))
+                File.Delete(backupFile);
+        }
+        finally
+        {
+            if (File.Exists(dbPath)) File.Delete(dbPath);
+            var saltPath = dbPath + ".salt";
+            if (File.Exists(saltPath)) File.Delete(saltPath);
         }
     }
 }

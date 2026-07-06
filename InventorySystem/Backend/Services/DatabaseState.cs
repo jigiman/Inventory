@@ -1,3 +1,8 @@
+using System;
+using System.IO;
+using System.Security.Cryptography;
+using System.Text;
+
 namespace Backend.Services;
 
 /// <summary>
@@ -8,7 +13,8 @@ namespace Backend.Services;
 public class DatabaseState
 {
     private string? _dbPath;
-    private string? _password;
+    private byte[]? _encryptedPassword;
+    private byte[]? _salt;
 
     /// <summary>Full file path to the active SQLite database.</summary>
     public string? DbPath
@@ -18,14 +24,15 @@ public class DatabaseState
         {
             _dbPath = value;
             IsInitialized = value is not null;
+            _salt = null; // Reset salt cache so it re-evaluates for the new path
         }
     }
 
     /// <summary>Optional password for an encrypted database.</summary>
     public string? Password
     {
-        get => _password;
-        set => _password = value;
+        get => _encryptedPassword != null ? SecureMemory.Unprotect(_encryptedPassword) : null;
+        set => _encryptedPassword = value != null ? SecureMemory.Protect(value) : null;
     }
 
     /// <summary>True once the user has selected/created a database.</summary>
@@ -43,12 +50,100 @@ public class DatabaseState
                 DataSource = _dbPath
             };
 
-            if (!string.IsNullOrEmpty(_password))
+            var rawPassword = Password;
+            if (!string.IsNullOrEmpty(rawPassword))
             {
-                builder.Password = _password;
+                var salt = GetOrCreateSalt();
+                var key = Rfc2898DeriveBytes.Pbkdf2(rawPassword, salt, 100000, HashAlgorithmName.SHA256, 32);
+                var hexKey = Convert.ToHexString(key);
+                
+                // SQLCipher expects raw hex key as x'HEX_KEY'
+                builder.Password = $"x'{hexKey}'";
             }
 
             return builder.ToString();
         }
     }
+
+    private byte[] GetOrCreateSalt()
+    {
+        if (_salt != null) return _salt;
+        if (string.IsNullOrEmpty(_dbPath))
+            throw new InvalidOperationException("DbPath must be set before generating or retrieving a salt.");
+
+        var saltPath = _dbPath + ".salt";
+        if (File.Exists(saltPath))
+        {
+            try
+            {
+                _salt = File.ReadAllBytes(saltPath);
+                if (_salt.Length == 16) return _salt;
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Error(ex, "Failed to read salt file at {SaltPath}, regenerating.", saltPath);
+            }
+        }
+
+        // Generate new salt
+        _salt = RandomNumberGenerator.GetBytes(16);
+        try
+        {
+            File.WriteAllBytes(saltPath, _salt);
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "Failed to write salt file at {SaltPath}.", saltPath);
+        }
+        return _salt;
+    }
 }
+
+internal static class SecureMemory
+{
+    private static readonly byte[] SessionKey = RandomNumberGenerator.GetBytes(32);
+    private static readonly byte[] SessionIv = RandomNumberGenerator.GetBytes(16);
+
+    public static byte[] Protect(string value)
+    {
+        if (value == null) return null!;
+        var bytes = Encoding.UTF8.GetBytes(value);
+        return Encrypt(bytes);
+    }
+
+    public static string Unprotect(byte[] encryptedBytes)
+    {
+        if (encryptedBytes == null) return null!;
+        var raw = Decrypt(encryptedBytes);
+        return Encoding.UTF8.GetString(raw);
+    }
+
+    private static byte[] Encrypt(byte[] data)
+    {
+        using var aes = Aes.Create();
+        aes.Key = SessionKey;
+        aes.IV = SessionIv;
+        using var ms = new MemoryStream();
+        using (var cs = new CryptoStream(ms, aes.CreateEncryptor(), CryptoStreamMode.Write))
+        {
+            cs.Write(data, 0, data.Length);
+            cs.FlushFinalBlock();
+        }
+        return ms.ToArray();
+    }
+
+    private static byte[] Decrypt(byte[] encryptedData)
+    {
+        using var aes = Aes.Create();
+        aes.Key = SessionKey;
+        aes.IV = SessionIv;
+        using var ms = new MemoryStream();
+        using (var cs = new CryptoStream(ms, aes.CreateDecryptor(), CryptoStreamMode.Write))
+        {
+            cs.Write(encryptedData, 0, encryptedData.Length);
+            cs.FlushFinalBlock();
+        }
+        return ms.ToArray();
+    }
+}
+

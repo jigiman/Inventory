@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using System.IO.Compression;
 using Backend.Data;
 using Backend.Models;
 using Backend.Services;
@@ -32,7 +33,7 @@ public static class SettingEndpoints
             }
             await db.SaveChangesAsync();
             return Results.Ok(setting);
-        });
+        }).AddEndpointFilter<ValidationFilter<Setting>>();
 
         app.MapGet("/api/backups", (AppDbContext db, BackupService bs) =>
         {
@@ -42,7 +43,10 @@ public static class SettingEndpoints
             if (!Directory.Exists(backupsDir))
                 return Results.Ok(new List<string>());
 
-            var files = Directory.GetFiles(backupsDir, "*.db")
+            var files = Directory.GetFiles(backupsDir, "*.*")
+                .Where(f => f.EndsWith(".db", StringComparison.OrdinalIgnoreCase) ||
+                            f.EndsWith(".bak", StringComparison.OrdinalIgnoreCase) ||
+                            f.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
                 .Select(Path.GetFileName)
                 .ToList();
             return Results.Ok(files);
@@ -61,6 +65,57 @@ public static class SettingEndpoints
 
             await bs.RestoreBackupAsync(dto.FileName);
             return Results.Ok(new { Status = "Database restored successfully" });
+        });
+
+        app.MapGet("/api/diagnostics/export", async (BackupService bs) =>
+        {
+            var dbPath = bs.GetDatabaseFilePath();
+            var appDataPath = Path.GetDirectoryName(dbPath) ?? "";
+            var logsDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "InventorySystem", "Logs");
+
+            var tempZipPath = Path.Combine(Path.GetTempPath(), $"diagnostics_{Guid.NewGuid()}.zip");
+            try
+            {
+                using (var fs = new FileStream(tempZipPath, FileMode.Create))
+                using (var archive = new System.IO.Compression.ZipArchive(fs, System.IO.Compression.ZipArchiveMode.Create))
+                {
+                    // Add app log files
+                    if (Directory.Exists(logsDir))
+                    {
+                        var logFiles = Directory.GetFiles(logsDir, "*.txt");
+                        foreach (var logFile in logFiles)
+                        {
+                            archive.CreateEntryFromFile(logFile, "Logs/" + Path.GetFileName(logFile));
+                        }
+                    }
+
+                    // Add system diagnostic file
+                    var diagEntry = archive.CreateEntry("diagnostics_report.txt");
+                    using (var writer = new StreamWriter(diagEntry.Open()))
+                    {
+                        await writer.WriteLineAsync("Inventory System Diagnostics Report");
+                        await writer.WriteLineAsync($"Generated: {DateTime.UtcNow} UTC");
+                        await writer.WriteLineAsync($"OS Version: {System.Runtime.InteropServices.RuntimeInformation.OSDescription}");
+                        await writer.WriteLineAsync($"Framework: {System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription}");
+                        await writer.WriteLineAsync($"Machine Name: {Environment.MachineName}");
+                        await writer.WriteLineAsync($"Processors: {Environment.ProcessorCount}");
+                        
+                        var dbFileInfo = new FileInfo(dbPath);
+                        await writer.WriteLineAsync($"Database Path: {dbPath}");
+                        await writer.WriteLineAsync($"Database Size: {dbFileInfo.Length} bytes");
+                        await writer.WriteLineAsync($"Database Created: {dbFileInfo.CreationTimeUtc} UTC");
+                        await writer.WriteLineAsync($"Database Last Write: {dbFileInfo.LastWriteTimeUtc} UTC");
+                    }
+                }
+
+                var zipBytes = await File.ReadAllBytesAsync(tempZipPath);
+                return Results.File(zipBytes, "application/zip", $"diagnostics_{DateTime.UtcNow:yyyyMMdd_HHmmss}.zip");
+            }
+            finally
+            {
+                if (File.Exists(tempZipPath))
+                    File.Delete(tempZipPath);
+            }
         });
     }
 }
