@@ -23,7 +23,8 @@ public static class SaleEndpoints
             string? search = null,
             string? status = null,
             DateTime? startDate = null,
-            DateTime? endDate = null) =>
+            DateTime? endDate = null,
+            int? customerId = null) =>
         {
             var query = db.Sales
                 .Include(s => s.Customer)
@@ -31,6 +32,11 @@ public static class SaleEndpoints
                     .ThenInclude(si => si.Product)
                 .AsNoTracking()
                 .AsQueryable();
+
+            if (customerId != null)
+            {
+                query = query.Where(s => s.CustomerId == customerId.Value);
+            }
 
             if (!string.IsNullOrWhiteSpace(search))
             {
@@ -217,11 +223,12 @@ public static class SaleEndpoints
             return Results.Ok(new { totalCount, items, page, pageSize });
         });
 
-        app.MapGet("/api/payments", async (AppDbContext db, int? saleId, int? purchaseOrderId) =>
+        app.MapGet("/api/payments", async (AppDbContext db, int? saleId, int? purchaseOrderId, int? customerId) =>
         {
             var query = db.Payments.AsQueryable();
             if (saleId != null) query = query.Where(p => p.SaleId == saleId);
             if (purchaseOrderId != null) query = query.Where(p => p.PurchaseOrderId == purchaseOrderId);
+            if (customerId != null) query = query.Where(p => p.CustomerId == customerId);
             return await query.ToListAsync();
         });
 

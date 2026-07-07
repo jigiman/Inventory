@@ -28,7 +28,7 @@ async function requestRaw<T>(path: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE}${path}`;
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...options?.headers,
+    ...((options?.headers as Record<string, string>) || {}),
   };
   if (sessionToken) {
     headers['Authorization'] = `Bearer ${sessionToken}`;
@@ -378,7 +378,7 @@ export const api = {
     request<PurchaseOrder>(`/api/purchase-orders/${id}/receive`, { method: 'POST', body: JSON.stringify(items) }),
 
   // Sales
-  getSales: (params?: { page?: number; pageSize?: number; search?: string; status?: string; startDate?: string; endDate?: string }) => {
+  getSales: (params?: { page?: number; pageSize?: number; search?: string; status?: string; startDate?: string; endDate?: string; customerId?: number }) => {
     let url = '/api/sales';
     if (params) {
       const q = new URLSearchParams();
@@ -388,6 +388,7 @@ export const api = {
       if (params.status) q.append('status', params.status);
       if (params.startDate) q.append('startDate', params.startDate);
       if (params.endDate) q.append('endDate', params.endDate);
+      if (params.customerId) q.append('customerId', params.customerId.toString());
       url += '?' + q.toString();
     }
     return request<PaginatedResult<Sale>>(url);
@@ -444,12 +445,13 @@ export const api = {
     return request<PaginatedResult<FinanceReportItem>>(url);
   },
   recordPayment: (payment: Payment) => request<Payment>('/api/payments', { method: 'POST', body: JSON.stringify(payment) }),
-  getPayments: (params?: { saleId?: number; purchaseOrderId?: number }) => {
+  getPayments: (params?: { saleId?: number; purchaseOrderId?: number; customerId?: number }) => {
     let url = '/api/payments';
     if (params) {
       const q = new URLSearchParams();
       if (params.saleId) q.append('saleId', params.saleId.toString());
       if (params.purchaseOrderId) q.append('purchaseOrderId', params.purchaseOrderId.toString());
+      if (params.customerId) q.append('customerId', params.customerId.toString());
       url += '?' + q.toString();
     }
     return request<Payment[]>(url);

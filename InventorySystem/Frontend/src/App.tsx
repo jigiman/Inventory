@@ -11,12 +11,14 @@ import {
    Moon,
    Menu,
    ShoppingCart,
-   Wallet
+   Wallet,
+   Users
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard';
 import Products from './pages/Products';
 import Masters from './pages/Masters';
+import Customers from './pages/Customers';
 import Purchasing from './pages/Purchasing';
 import Sales from './pages/Sales';
 import Finance from './pages/Finance';
@@ -101,6 +103,7 @@ export default function App() {
     { id: 'dashboard', text: 'Dashboard', icon: <LayoutDashboard size={18} /> },
     { id: 'products', text: 'Products', icon: <Package size={18} /> },
     { id: 'masters', text: 'Masters', icon: <Building2 size={18} /> },
+    { id: 'customers', text: 'Customers', icon: <Users size={18} /> },
     { id: 'purchasing', text: 'Purchasing', icon: <FileText size={18} /> },
     { id: 'sales', text: 'Sales', icon: <ShoppingCart size={18} /> },
     { id: 'finance', text: 'Finance', icon: <Wallet size={18} /> },
@@ -198,6 +201,7 @@ export default function App() {
           {activePage === 'dashboard' && <Dashboard />}
           {activePage === 'products' && <Products />}
           {activePage === 'masters' && <Masters />}
+          {activePage === 'customers' && <Customers />}
           {activePage === 'purchasing' && <Purchasing />}
           {activePage === 'sales' && <Sales />}
           {activePage === 'finance' && <Finance />}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Edit2, Trash2, Plus } from 'lucide-react';
 import { api } from '../api';
-import type { Category, Brand, Unit, Supplier, Customer } from '../api';
+import type { Category, Brand, Unit, Supplier } from '../api';
 import { Button } from '../components/ui/Button';
 import { Dialog } from '../components/ui/Dialog';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
@@ -13,7 +13,6 @@ export default function Masters() {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -30,24 +29,21 @@ export default function Masters() {
   const [formBrand, setFormBrand] = useState<Brand>({ name: '', isArchived: false });
   const [formUnit, setFormUnit] = useState<Unit>({ name: '' });
   const [formSupplier, setFormSupplier] = useState<Supplier>({ name: '', contactPerson: '', phone: '', email: '', address: '', notes: '' });
-  const [formCustomer, setFormCustomer] = useState<Customer>({ name: '', contactPerson: '', phone: '', email: '', address: '', notes: '' });
 
   async function loadData() {
     setLoading(true);
     setError('');
     try {
-      const [cats, brs, uns, sups, custs] = await Promise.all([
+      const [cats, brs, uns, sups] = await Promise.all([
         api.getCategories(),
         api.getBrands(),
         api.getUnits(),
         api.getSuppliers(),
-        api.getCustomers(),
       ]);
       setCategories(cats);
       setBrands(brs);
       setUnits(uns);
       setSuppliers(sups);
-      setCustomers(custs);
     } catch (err: any) {
       setError(err.message || 'Failed to load master data');
     } finally {
@@ -65,7 +61,6 @@ export default function Masters() {
     setFormBrand({ name: '', isArchived: false });
     setFormUnit({ name: '' });
     setFormSupplier({ name: '', contactPerson: '', phone: '', email: '', address: '', notes: '' });
-    setFormCustomer({ name: '', contactPerson: '', phone: '', email: '', address: '', notes: '' });
     setOpenDialog(true);
   };
 
@@ -75,7 +70,6 @@ export default function Masters() {
     else if (activeTab === 1) setFormBrand(item);
     else if (activeTab === 2) setFormUnit(item);
     else if (activeTab === 3) setFormSupplier(item);
-    else if (activeTab === 4) setFormCustomer(item);
     setOpenDialog(true);
   };
 
@@ -92,7 +86,6 @@ export default function Masters() {
       else if (activeTab === 1) await api.deleteBrand(idToDelete);
       else if (activeTab === 2) await api.deleteUnit(idToDelete);
       else if (activeTab === 3) await api.deleteSupplier(idToDelete);
-      else if (activeTab === 4) await api.deleteCustomer(idToDelete);
       loadData();
     } catch (err: any) {
       setError(err.message || 'Failed to delete item');
@@ -114,9 +107,6 @@ export default function Masters() {
       } else if (activeTab === 3) {
         if (editId) await api.updateSupplier(editId, formSupplier);
         else await api.createSupplier(formSupplier);
-      } else if (activeTab === 4) {
-        if (editId) await api.updateCustomer(editId, formCustomer);
-        else await api.createCustomer(formCustomer);
       }
       setOpenDialog(false);
       loadData();
@@ -125,14 +115,14 @@ export default function Masters() {
     }
   };
 
-  const tabs = ['Categories', 'Brands', 'Units', 'Suppliers', 'Customers'];
+  const tabs = ['Categories', 'Brands', 'Units', 'Suppliers'];
 
   return (
     <div className="space-y-4">
       <div className="flex justify-end items-center">
         <Button onClick={handleOpenAdd} className="inline-flex items-center space-x-2">
           <Plus size={16} />
-          <span>Add {activeTab === 0 ? 'Category' : activeTab === 1 ? 'Brand' : activeTab === 2 ? 'Unit' : activeTab === 3 ? 'Supplier' : 'Customer'}</span>
+          <span>Add {activeTab === 0 ? 'Category' : activeTab === 1 ? 'Brand' : activeTab === 2 ? 'Unit' : 'Supplier'}</span>
         </Button>
       </div>
 
@@ -197,16 +187,6 @@ export default function Masters() {
                   <th className="px-6 py-4 text-right">Actions</th>
                 </tr>
               )}
-              {activeTab === 4 && (
-                <tr>
-                  <th className="px-6 py-4">Name</th>
-                  <th className="px-6 py-4">Contact</th>
-                  <th className="px-6 py-4">Phone</th>
-                  <th className="px-6 py-4">Email</th>
-                  <th className="px-6 py-4">Address</th>
-                  <th className="px-6 py-4 text-right">Actions</th>
-                </tr>
-              )}
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
               {activeTab === 0 && categories.map((cat) => (
@@ -259,24 +239,10 @@ export default function Masters() {
                   </td>
                 </tr>
               ))}
-              {activeTab === 4 && customers.map((cust) => (
-                <tr key={cust.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/10 transition-colors">
-                  <td className="px-6 py-4 font-bold text-slate-900 dark:text-slate-200">{cust.name}</td>
-                  <td className="px-6 py-4">{cust.contactPerson}</td>
-                  <td className="px-6 py-4">{cust.phone}</td>
-                  <td className="px-6 py-4">{cust.email}</td>
-                  <td className="px-6 py-4 truncate max-w-xs">{cust.address}</td>
-                  <td className="px-6 py-4 text-right space-x-2 whitespace-nowrap">
-                    <button onClick={() => handleOpenEdit(cust)} className="p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200 rounded-lg cursor-pointer transition-colors" title="Edit"><Edit2 size={14} /></button>
-                    <button onClick={() => handleDelete(cust.id!)} className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-lg cursor-pointer transition-colors" title="Delete"><Trash2 size={14} /></button>
-                  </td>
-                </tr>
-              ))}
               {((activeTab === 0 && categories.length === 0) ||
                 (activeTab === 1 && brands.length === 0) ||
                 (activeTab === 2 && units.length === 0) ||
-                (activeTab === 3 && suppliers.length === 0) ||
-                (activeTab === 4 && customers.length === 0)) && (
+                (activeTab === 3 && suppliers.length === 0)) && (
                 <tr>
                   <td colSpan={10} className="py-12 text-center text-slate-400 font-medium">
                     No master records found.
@@ -292,7 +258,7 @@ export default function Masters() {
       <Dialog 
         open={openDialog} 
         onClose={() => setOpenDialog(false)} 
-        title={`${editId ? 'Edit' : 'Add'} ${activeTab === 0 ? 'Category' : activeTab === 1 ? 'Brand' : activeTab === 2 ? 'Unit' : activeTab === 3 ? 'Supplier' : 'Customer'}`}
+        title={`${editId ? 'Edit' : 'Add'} ${activeTab === 0 ? 'Category' : activeTab === 1 ? 'Brand' : activeTab === 2 ? 'Unit' : 'Supplier'}`}
         size="md"
       >
         <form onSubmit={handleSave} className="space-y-5">
@@ -329,34 +295,6 @@ export default function Masters() {
                   rows={2}
                   value={formSupplier.notes || ''} 
                   onChange={(e) => setFormSupplier({ ...formSupplier, notes: e.target.value })}
-                />
-              </div>
-            </div>
-          )}
-          {activeTab === 4 && (
-            <div className="space-y-4">
-              <Input label="Customer Name" required value={formCustomer.name} onChange={(e) => setFormCustomer({ ...formCustomer, name: e.target.value })} />
-              <div className="grid grid-cols-2 gap-4">
-                <Input label="Contact Person" value={formCustomer.contactPerson || ''} onChange={(e) => setFormCustomer({ ...formCustomer, contactPerson: e.target.value })} />
-                <Input label="Phone" value={formCustomer.phone || ''} onChange={(e) => setFormCustomer({ ...formCustomer, phone: e.target.value })} />
-              </div>
-              <Input label="Email" type="email" value={formCustomer.email || ''} onChange={(e) => setFormCustomer({ ...formCustomer, email: e.target.value })} />
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">Address</label>
-                <textarea
-                  className="flex w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400/80 focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 dark:placeholder-slate-600 dark:focus:border-indigo-400 dark:focus:ring-indigo-400/10 transition-all duration-200"
-                  rows={2}
-                  value={formCustomer.address || ''}
-                  onChange={(e) => setFormCustomer({ ...formCustomer, address: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">Notes</label>
-                <textarea
-                  className="flex w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400/80 focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 dark:placeholder-slate-600 dark:focus:border-indigo-400 dark:focus:ring-indigo-400/10 transition-all duration-200"
-                  rows={2}
-                  value={formCustomer.notes || ''}
-                  onChange={(e) => setFormCustomer({ ...formCustomer, notes: e.target.value })}
                 />
               </div>
             </div>
