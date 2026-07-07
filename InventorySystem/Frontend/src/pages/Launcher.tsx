@@ -1,10 +1,11 @@
-import { useState } from 'react';
-import { FolderOpen, Plus, Database, Clock, ChevronRight, AlertCircle, Loader2, Package, Sun, Moon } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { FolderOpen, Plus, Database, Clock, ChevronRight, AlertCircle, Loader2, Package, Sun, Moon, Trash2 } from 'lucide-react';
 import { api, setSessionToken } from '../api';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { pickOpenFile, pickSaveFile, isPhotino } from '../utils/photino';
 import type { Theme } from '../utils/theme';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 
 interface RecentDatabase {
   name: string;
@@ -33,6 +34,14 @@ export default function Launcher({ recentDatabases, onReady, theme, onThemeChang
   const [tab, setTab] = useState<Tab>(recentDatabases.length > 0 ? 'recent' : 'new');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Local state for recent databases
+  const [recents, setRecents] = useState<RecentDatabase[]>(recentDatabases);
+  useEffect(() => {
+    setRecents(recentDatabases);
+  }, [recentDatabases]);
+
+  const [confirmDeletePath, setConfirmDeletePath] = useState<string | null>(null);
 
   // "New database" form
   const [newPath, setNewPath] = useState('');
@@ -67,6 +76,20 @@ export default function Launcher({ recentDatabases, onReady, theme, onThemeChang
       } else {
         setError(e.message || 'Failed to open database.');
       }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRemoveRecent = async () => {
+    if (!confirmDeletePath) return;
+    setLoading(true);
+    try {
+      const res = await api.removeRecentDatabase(confirmDeletePath);
+      setRecents(res.recentDatabases);
+      setConfirmDeletePath(null);
+    } catch (e: any) {
+      setError(e.message || 'Failed to remove database reference.');
     } finally {
       setLoading(false);
     }
@@ -196,30 +219,42 @@ export default function Launcher({ recentDatabases, onReady, theme, onThemeChang
                   </div>
                 )}
 
-                {recentDatabases.length === 0 ? (
+                {recents.length === 0 ? (
                   <p className="py-6 text-center text-sm text-slate-555 dark:text-slate-500">No recent databases found.</p>
                 ) : (
-                  recentDatabases.map((db) => (
-                    <button
+                  recents.map((db) => (
+                    <div
                       key={db.path}
-                      onClick={() => handleOpen(db.path)}
-                      disabled={loading || !!selectedDbPath}
-                      className="group flex w-full items-center gap-4 rounded-2xl border border-slate-200/60 dark:border-white/8 bg-white/40 dark:bg-white/5 p-4 text-left transition-all duration-200 hover:border-indigo-500/40 hover:bg-indigo-55/40 dark:hover:bg-indigo-500/10 disabled:opacity-50 cursor-pointer"
+                      className="group flex w-full items-center gap-4 rounded-2xl border border-slate-200/60 dark:border-white/8 bg-white/40 dark:bg-white/5 p-4 text-left transition-all duration-200 hover:border-indigo-500/40 hover:bg-indigo-50/40 dark:hover:bg-indigo-500/10"
                     >
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-500/20 text-indigo-650 dark:text-indigo-400 group-hover:bg-indigo-500/30 transition-colors">
-                        <Database size={18} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-semibold text-slate-800 dark:text-slate-100">{db.name}</p>
-                        <p className="truncate text-xs text-slate-500 dark:text-slate-555">{db.path}</p>
-                        <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-600">{formatDate(db.lastOpened)}</p>
-                      </div>
-                      {loading ? (
-                        <Loader2 size={16} className="shrink-0 animate-spin text-indigo-655 dark:text-indigo-400" />
-                      ) : (
-                        <ChevronRight size={16} className="shrink-0 text-slate-400 dark:text-slate-655 transition-transform group-hover:translate-x-0.5 group-hover:text-indigo-600 dark:group-hover:text-indigo-400" />
-                      )}
-                    </button>
+                      <button
+                        onClick={() => handleOpen(db.path)}
+                        disabled={loading || !!selectedDbPath}
+                        className="flex flex-1 items-center gap-4 text-left disabled:opacity-50 cursor-pointer min-w-0"
+                      >
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-500/20 text-indigo-650 dark:text-indigo-400 group-hover:bg-indigo-500/30 transition-colors">
+                          <Database size={18} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-semibold text-slate-800 dark:text-slate-100">{db.name}</p>
+                          <p className="truncate text-xs text-slate-500 dark:text-slate-400">{db.path}</p>
+                          <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-600">{formatDate(db.lastOpened)}</p>
+                        </div>
+                        {loading ? (
+                          <Loader2 size={16} className="shrink-0 animate-spin text-indigo-650 dark:text-indigo-400" />
+                        ) : (
+                          <ChevronRight size={16} className="shrink-0 text-slate-400 dark:text-slate-500 transition-transform group-hover:translate-x-0.5 group-hover:text-indigo-600 dark:group-hover:text-indigo-400" />
+                        )}
+                      </button>
+                      <button
+                        onClick={() => setConfirmDeletePath(db.path)}
+                        disabled={loading}
+                        className="rounded-xl p-2.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-955/20 transition-all duration-300 cursor-pointer"
+                        title="Remove reference"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   ))
                 )}
 
@@ -347,6 +382,16 @@ export default function Launcher({ recentDatabases, onReady, theme, onThemeChang
           <code className="text-slate-600 dark:text-slate-500">Backups/</code> folder next to the database file.
         </p>
       </div>
+
+      <ConfirmDialog
+        open={confirmDeletePath !== null}
+        title="Remove Database Reference"
+        description="Are you sure you want to remove this database from the recent list? This only removes the reference and does not delete the database file from your computer."
+        confirmLabel="Remove Reference"
+        variant="danger"
+        onConfirm={handleRemoveRecent}
+        onCancel={() => setConfirmDeletePath(null)}
+      />
     </div>
   );
 }

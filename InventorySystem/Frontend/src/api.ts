@@ -314,6 +314,9 @@ export const api = {
   createDatabase: (dbPath: string, name?: string, password?: string) => request<{ status: string; dbPath: string; name: string; sessionToken: string }>('/api/launcher/new', {
     method: 'POST', body: JSON.stringify({ dbPath, name, password }),
   }),
+  removeRecentDatabase: (dbPath: string) => request<{ recentDatabases: { name: string; path: string; lastOpened: string }[] }>('/api/launcher/remove-recent', {
+    method: 'POST', body: JSON.stringify({ dbPath }),
+  }),
   saveTheme: (theme: 'light' | 'dark') => request<{ theme: 'light' | 'dark' }>('/api/launcher/theme', {
     method: 'POST', body: JSON.stringify({ theme }),
   }),

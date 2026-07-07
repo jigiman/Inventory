@@ -165,6 +165,21 @@ public static class LauncherEndpoints
             Log.Information("Created new database '{Name}' at {Path}", name, path);
             return Results.Ok(new { status = "READY", dbPath = path, name, sessionToken = dbState.SessionToken });
         });
+
+        // ── POST /api/launcher/remove-recent ──────────────────────────────────────
+        // Removes a database path from the list of recent databases (does not delete file)
+        app.MapPost("/api/launcher/remove-recent", (RemoveRecentRequest req) =>
+        {
+            if (string.IsNullOrWhiteSpace(req.DbPath))
+                return Results.BadRequest("dbPath is required.");
+
+            var config = LauncherConfig.Load();
+            config.RecentDatabases.RemoveAll(r => string.Equals(r.Path, req.DbPath, StringComparison.OrdinalIgnoreCase));
+            config.Save();
+
+            Log.Information("Removed database reference: {Path}", req.DbPath);
+            return Results.Ok(new { recentDatabases = config.RecentDatabases });
+        });
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
@@ -330,3 +345,4 @@ public static class LauncherEndpoints
 public record OpenDatabaseRequest(string DbPath, string? Password);
 public record NewDatabaseRequest(string DbPath, string? Name, string? Password);
 public record ThemeRequest(string Theme);
+public record RemoveRecentRequest(string DbPath);
