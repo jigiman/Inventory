@@ -166,6 +166,7 @@ export default function Purchasing() {
       });
       setOpenCreate(false);
       loadData();
+      await loadOrders();
     } catch (err: any) {
       alert(err.message || 'Failed to create Purchase Order');
     }
@@ -191,6 +192,7 @@ export default function Purchasing() {
       await api.receivePurchaseOrder(selectedOrder.id!, payload);
       setOpenReceive(false);
       loadData();
+      await loadOrders();
     } catch (err: any) {
       alert(err.message || 'Failed to receive items');
     }
@@ -631,6 +633,7 @@ export default function Purchasing() {
                 setOpenReturn(false);
                 await loadReturns();
                 await loadData();
+                await loadOrders();
               } catch (err: any) {
                 alert(err.message || 'Failed to record purchase return');
               } finally {

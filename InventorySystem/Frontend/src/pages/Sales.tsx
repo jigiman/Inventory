@@ -213,6 +213,7 @@ export default function Sales() {
       });
       setOpenCreate(false);
       loadData();
+      await loadSales();
     } catch (err: any) {
       alert(err.message || 'Failed to create Sale');
     }
@@ -732,6 +733,7 @@ export default function Sales() {
                           });
                           await loadPayments();
                           await loadData(); // Refresh the main sales list to reflect state changes
+                          await loadSales();
                           setShowAddPayment(false);
                         } catch (err: any) {
                           alert(err.message || 'Failed to record payment');
@@ -843,6 +845,7 @@ export default function Sales() {
                 setOpenReturn(false);
                 await loadReturns();
                 await loadData();
+                await loadSales();
               } catch (err: any) {
                 alert(err.message || 'Failed to record sales return');
               } finally {
