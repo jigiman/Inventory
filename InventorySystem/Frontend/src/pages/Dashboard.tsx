@@ -74,7 +74,7 @@ export default function Dashboard() {
       },
       tooltip: {
         trigger: 'item',
-        formatter: '{b}: <b>${c}</b> ({d}%)',
+        formatter: '{b}: <b>NPR {c}</b> ({d}%)',
         backgroundColor: isDark ? '#0f172a' : '#ffffff',
         borderColor: isDark ? '#1e293b' : '#e2e8f0',
         textStyle: {
@@ -192,7 +192,7 @@ export default function Dashboard() {
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-slate-455">Total Debtors</p>
             <h3 className="text-2xl font-extrabold text-slate-900 dark:text-slate-100 mt-1">
-              ${stats?.totalDebtors.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              NPR {stats?.totalDebtors.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </h3>
           </div>
         </div>
@@ -204,7 +204,7 @@ export default function Dashboard() {
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-slate-455">Total Creditors</p>
             <h3 className="text-2xl font-extrabold text-slate-900 dark:text-slate-100 mt-1">
-              ${stats?.totalCreditors.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              NPR {stats?.totalCreditors.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </h3>
           </div>
         </div>

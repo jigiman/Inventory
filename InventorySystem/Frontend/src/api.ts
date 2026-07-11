@@ -154,7 +154,11 @@ export interface Product {
   productImage: string;
   isActive: boolean;
   notes: string;
+  parentProductId?: number;
+  variantValues?: string;
+  variants?: Product[];
 }
+
 
 export interface PurchaseItem {
   id?: number;

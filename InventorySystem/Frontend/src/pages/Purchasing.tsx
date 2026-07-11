@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Trash2, Plus, ArrowDownRight, Clipboard, Eye } from 'lucide-react';
 import { api } from '../api';
 import type { PurchaseOrder, Supplier, Product, PurchaseItem } from '../api';
@@ -13,6 +13,26 @@ export default function Purchasing() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  const selectableProducts = useMemo(() => {
+    return products.flatMap(p => 
+      p.variants && p.variants.length > 0 
+        ? p.variants.map(v => ({ 
+            id: v.id, 
+            name: `${p.name} (${v.variantValues})`, 
+            sku: v.sku, 
+            costPrice: v.costPrice, 
+            sellingPrice: v.sellingPrice 
+          }))
+        : [{ 
+            id: p.id, 
+            name: p.name, 
+            sku: p.sku, 
+            costPrice: p.costPrice, 
+            sellingPrice: p.sellingPrice 
+          }]
+    );
+  }, [products]);
 
   // Search & Filter States
   const [searchQuery, setSearchQuery] = useState('');
@@ -74,7 +94,7 @@ export default function Purchasing() {
     try {
       const [sups, prods] = await Promise.all([
         api.getSuppliers(),
-        api.getProducts(),
+        api.getProducts(1, 1000),
       ]);
       setSuppliers(sups);
       setProducts(prods.items);
@@ -123,8 +143,20 @@ export default function Purchasing() {
 
   const totalReturned = purchaseReturns.reduce((sum, r) => sum + r.totalAmount, 0);
 
+  const handleOpenCreate = () => {
+    if (selectableProducts.length > 0) {
+      setPoItems([{ productId: selectableProducts[0].id || 0, quantityOrdered: 1, costPrice: selectableProducts[0].costPrice || 0 }]);
+    } else {
+      setPoItems([{ productId: 0, quantityOrdered: 1, costPrice: 0 }]);
+    }
+    if (suppliers.length > 0) {
+      setSelectedSupplierId(suppliers[0].id || 0);
+    }
+    setOpenCreate(true);
+  };
+
   const handleAddPoItem = () => {
-    setPoItems([...poItems, { productId: products[0]?.id || 0, quantityOrdered: 1, costPrice: products[0]?.costPrice || 0 }]);
+    setPoItems([...poItems, { productId: selectableProducts[0]?.id || 0, quantityOrdered: 1, costPrice: selectableProducts[0]?.costPrice || 0 }]);
   };
 
   const handleRemovePoItem = (index: number) => {
@@ -137,7 +169,7 @@ export default function Purchasing() {
     const next = [...poItems];
     next[index] = { ...next[index], [field]: value };
     if (field === 'productId') {
-      const prod = products.find(p => p.id === value);
+      const prod = selectableProducts.find(p => p.id === value);
       if (prod) {
         next[index].costPrice = prod.costPrice;
       }
@@ -199,7 +231,7 @@ export default function Purchasing() {
   return (
     <div className="space-y-4">
       <div className="flex justify-end items-center">
-        <Button onClick={() => setOpenCreate(true)} disabled={suppliers.length === 0 || products.length === 0} className="inline-flex items-center space-x-2">
+        <Button onClick={handleOpenCreate} disabled={suppliers.length === 0 || products.length === 0} className="inline-flex items-center space-x-2">
           <Plus size={16} />
           <span>New Purchase Order</span>
         </Button>
@@ -364,7 +396,7 @@ export default function Purchasing() {
                       value={item.productId}
                       onChange={(e) => handlePoItemChange(idx, 'productId', Number(e.target.value))}
                     >
-                      {products.map(p => <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>)}
+                      {selectableProducts.map(p => <option key={p.id} value={p.id}>{p.name}{p.sku ? ` (${p.sku})` : ''}</option>)}
                     </Select>
                   </div>
                   <div className="w-24">
@@ -515,9 +547,9 @@ export default function Purchasing() {
                         </td>
                         <td className="px-4 py-3 text-right font-bold">{item.quantityOrdered}</td>
                         <td className="px-4 py-3 text-right font-bold">{item.quantityReceived}</td>
-                        <td className="px-4 py-3 text-right">${(item.costPrice ?? 0).toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right">NPR {(item.costPrice ?? 0).toFixed(2)}</td>
                         <td className="px-4 py-3 text-right font-bold text-slate-900 dark:text-slate-200">
-                          ${((item.quantityOrdered ?? 0) * (item.costPrice ?? 0)).toFixed(2)}
+                          NPR {((item.quantityOrdered ?? 0) * (item.costPrice ?? 0)).toFixed(2)}
                         </td>
                       </tr>
                     ))}
@@ -529,7 +561,7 @@ export default function Purchasing() {
             <div className="flex justify-between items-center bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100/50 dark:border-indigo-900/40 rounded-xl p-4">
               <span className="text-xs font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400">Total Amount</span>
               <span className="text-lg font-extrabold text-indigo-700 dark:text-indigo-400">
-                ${selectedOrder.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                NPR {selectedOrder.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </div>
 
@@ -570,7 +602,7 @@ export default function Purchasing() {
                           <div>
                             <span className="font-bold text-slate-900 dark:text-slate-200">{r.returnNumber}</span>
                             <span className="text-slate-400 mx-1.5">|</span>
-                            <span className="text-rose-600 dark:text-rose-400 font-bold">${(r.totalAmount ?? 0).toFixed(2)}</span>
+                            <span className="text-rose-600 dark:text-rose-400 font-bold">NPR {(r.totalAmount ?? 0).toFixed(2)}</span>
                             {r.notes && <span className="text-slate-400 ml-2">({r.notes})</span>}
                           </div>
                           <span className="text-slate-400 font-medium">{new Date(r.returnDate).toLocaleDateString()}</span>
@@ -579,7 +611,7 @@ export default function Purchasing() {
                     </div>
                     <div className="flex justify-between text-xs font-bold pt-2.5 border-t border-slate-150 dark:border-slate-800">
                       <span className="text-slate-400">Total Returned:</span>
-                      <span className="text-rose-600">${totalReturned.toFixed(2)}</span>
+                      <span className="text-rose-600">NPR {totalReturned.toFixed(2)}</span>
                     </div>
                   </div>
                 )}

@@ -114,6 +114,12 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<Product>()
             .HasIndex(p => p.SupplierId);
 
+        modelBuilder.Entity<Product>()
+            .HasOne(p => p.ParentProduct)
+            .WithMany(p => p.Variants)
+            .HasForeignKey(p => p.ParentProductId)
+            .OnDelete(DeleteBehavior.Cascade);
+
         // StockTransaction indexes
         modelBuilder.Entity<StockTransaction>()
             .HasIndex(t => t.TransactionDate);

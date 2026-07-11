@@ -14,6 +14,28 @@ export default function Inventory() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  const selectableProducts = useMemo(() => {
+    return products.flatMap(p => 
+      p.variants && p.variants.length > 0 
+        ? p.variants.map(v => ({ 
+            id: v.id, 
+            name: `${p.name} (${v.variantValues})`, 
+            sku: v.sku, 
+            costPrice: v.costPrice, 
+            sellingPrice: v.sellingPrice,
+            currentQuantity: v.currentQuantity
+          }))
+        : [{ 
+            id: p.id, 
+            name: p.name, 
+            sku: p.sku, 
+            costPrice: p.costPrice, 
+            sellingPrice: p.sellingPrice,
+            currentQuantity: p.currentQuantity
+          }]
+    );
+  }, [products]);
+
   // Adjust / Count Dialog states
   const [openAdjust, setOpenAdjust] = useState(false);
   const [openCount, setOpenCount] = useState(false);
@@ -60,7 +82,7 @@ export default function Inventory() {
 
   const handleOpenAdjust = () => {
     setAdjustForm({
-      productId: products[0]?.id || 0,
+      productId: selectableProducts[0]?.id || 0,
       quantity: 1,
       adjustmentType: 'Plus',
       reason: ''
@@ -84,7 +106,7 @@ export default function Inventory() {
   };
 
   const handleOpenCount = () => {
-    const defaultProd = products[0];
+    const defaultProd = selectableProducts[0];
     setCountForm({
       productId: defaultProd?.id || 0,
       physicalQuantity: defaultProd?.currentQuantity || 0,
@@ -95,7 +117,7 @@ export default function Inventory() {
   };
 
   const handleCountProductChange = (productId: number) => {
-    const prod = products.find(p => p.id === productId);
+    const prod = selectableProducts.find(p => p.id === productId);
     setCountForm({
       ...countForm,
       productId,
@@ -350,7 +372,7 @@ export default function Inventory() {
             value={adjustForm.productId}
             onChange={(e) => setAdjustForm({ ...adjustForm, productId: Number(e.target.value) })}
           >
-            {products.map(p => <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>)}
+            {selectableProducts.map(p => <option key={p.id} value={p.id}>{p.name}{p.sku ? ` (${p.sku})` : ''}</option>)}
           </Select>
 
           <Select
@@ -396,7 +418,7 @@ export default function Inventory() {
             value={countForm.productId}
             onChange={(e) => handleCountProductChange(Number(e.target.value))}
           >
-            {products.map(p => <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>)}
+            {selectableProducts.map(p => <option key={p.id} value={p.id}>{p.name}{p.sku ? ` (${p.sku})` : ''}</option>)}
           </Select>
 
           <Input

@@ -339,7 +339,7 @@ export default function Customers() {
                           </span>
                         </td>
                         <td className="px-6 py-4 text-right font-extrabold text-slate-800 dark:text-slate-250">
-                          ${sale.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          NPR {sale.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                       </tr>
                     ))}
@@ -382,7 +382,7 @@ export default function Customers() {
                         </td>
                         <td className="px-6 py-4 text-slate-700 dark:text-slate-350">{ret.notes || '-'}</td>
                         <td className="px-6 py-4 text-right font-extrabold text-rose-600 dark:text-rose-450">
-                          ${ret.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          NPR {ret.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                       </tr>
                     ))}
@@ -427,7 +427,7 @@ export default function Customers() {
                         </td>
                         <td className="px-6 py-4 text-slate-700 dark:text-slate-350">{pay.notes || '-'}</td>
                         <td className={`px-6 py-4 text-right font-extrabold ${pay.isRefund ? 'text-rose-600 dark:text-rose-450' : 'text-emerald-600 dark:text-emerald-450'}`}>
-                          {pay.isRefund ? '-' : '+'}${pay.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          {pay.isRefund ? '-' : '+'}NPR {pay.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                       </tr>
                     ))}

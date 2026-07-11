@@ -178,13 +178,13 @@ export default function Finance() {
                     {activeTab === 'debtors' ? item.customer?.name : item.supplier?.name}
                   </td>
                   <td className="px-6 py-4 text-right font-medium">
-                    ${(activeTab === 'debtors' ? item.totalSales : item.totalPurchases)?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    NPR {(activeTab === 'debtors' ? item.totalSales : item.totalPurchases)?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </td>
                   <td className="px-6 py-4 text-right text-emerald-600 dark:text-emerald-400">
-                    ${item.totalPaid.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    NPR {item.totalPaid.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </td>
                   <td className="px-6 py-4 text-right font-black text-rose-600 dark:text-rose-400">
-                    ${item.balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    NPR {item.balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </td>
                   <td className="px-6 py-4 text-right">
                     <Button variant="outline" size="sm" onClick={() => handleOpenPayment(item)} className="inline-flex items-center space-x-1.5">
@@ -249,7 +249,7 @@ export default function Finance() {
             </p>
             <div className="mt-2 flex justify-between items-center">
                 <span className="text-xs text-slate-500">Current Balance:</span>
-                <span className="font-bold text-rose-600">${selectedEntity?.balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                <span className="font-bold text-rose-600">NPR {selectedEntity?.balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
             </div>
           </div>
 

@@ -40,4 +40,10 @@ public class Product
     public string ProductImage { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;
     public string Notes { get; set; } = string.Empty;
+
+    public int? ParentProductId { get; set; }
+    public Product? ParentProduct { get; set; }
+    public ICollection<Product> Variants { get; set; } = new List<Product>();
+    public string VariantValues { get; set; } = string.Empty; // e.g., "Color: Red, Size: L"
 }
+
