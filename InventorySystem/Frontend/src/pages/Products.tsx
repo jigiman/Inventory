@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Edit2, Trash2, Plus, Search, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Edit2, Trash2, Plus, Search, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 import { api } from '../api';
 import type { Product, Category, Brand, Unit, Supplier } from '../api';
 import { Button } from '../components/ui/Button';
@@ -16,12 +16,17 @@ export default function Products() {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
   const [openDialog, setOpenDialog] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
+
+  // Supplier stock details dialog states
+  const [openStockDetails, setOpenStockDetails] = useState(false);
+  const [selectedStockProduct, setSelectedStockProduct] = useState<any | null>(null);
+  const [stockBatches, setStockBatches] = useState<any[]>([]);
+  const [loadingBatches, setLoadingBatches] = useState(false);
 
   // Confirm delete dialog
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
@@ -93,6 +98,21 @@ export default function Products() {
       isActive: true, notes: ''
     });
     setOpenDialog(true);
+  };
+
+  const handleViewStock = async (productOrVariant: any) => {
+    setSelectedStockProduct(productOrVariant);
+    setOpenStockDetails(true);
+    setLoadingBatches(true);
+    try {
+      const data = await api.getProductBatches(productOrVariant.id);
+      setStockBatches(data);
+    } catch (e) {
+      console.error('Failed to load stock batches', e);
+      setStockBatches([]);
+    } finally {
+      setLoadingBatches(false);
+    }
   };
 
   const handleOpenEdit = (product: Product) => {
@@ -336,6 +356,14 @@ export default function Products() {
                             <button 
                               type="button"
                               className="flex items-center justify-center p-1.5 rounded-lg border border-slate-200/60 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-650 dark:text-slate-350 cursor-pointer transition-colors"
+                              onClick={() => handleViewStock(p)}
+                              title="View Supplier Stock Breakdown"
+                            >
+                              <Eye size={13} />
+                            </button>
+                            <button 
+                              type="button"
+                              className="flex items-center justify-center p-1.5 rounded-lg border border-slate-200/60 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-650 dark:text-slate-350 cursor-pointer transition-colors"
                               onClick={() => handleOpenEdit(p)}
                               title="Edit Product"
                             >
@@ -365,6 +393,7 @@ export default function Products() {
                                     <th className="px-6 py-2.5 text-right">Cost</th>
                                     <th className="px-6 py-2.5 text-right">Price</th>
                                     <th className="px-6 py-2.5">Status</th>
+                                    <th className="px-6 py-2.5 text-right">Actions</th>
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
@@ -383,6 +412,16 @@ export default function Products() {
                                         }`}>
                                           {v.isActive ? 'Active' : 'Inactive'}
                                         </span>
+                                      </td>
+                                      <td className="px-6 py-2.5 text-right">
+                                        <button
+                                          type="button"
+                                          className="inline-flex items-center justify-center p-1 rounded border border-slate-200/60 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 hover:text-indigo-600 dark:text-slate-400 cursor-pointer transition-colors"
+                                          onClick={() => handleViewStock(v)}
+                                          title="View Supplier Stock Breakdown"
+                                        >
+                                          <Eye size={12} />
+                                        </button>
                                       </td>
                                     </tr>
                                   ))}
@@ -809,6 +848,59 @@ export default function Products() {
         onConfirm={handleConfirmDelete}
         onCancel={() => setConfirmDeleteId(null)}
       />
+
+      <Dialog
+        open={openStockDetails}
+        onClose={() => { setOpenStockDetails(false); setSelectedStockProduct(null); setStockBatches([]); }}
+        title={`Supplier Stock Breakdown: ${selectedStockProduct?.name || ''}`}
+        size="md"
+      >
+        <div className="space-y-4 text-sm">
+          {loadingBatches ? (
+            <div className="flex h-40 items-center justify-center">
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent dark:border-indigo-400" />
+            </div>
+          ) : stockBatches.length === 0 ? (
+            <p className="text-slate-400 italic py-8 text-center">No active supplier stock batches found for this product.</p>
+          ) : (
+            <div className="overflow-hidden border border-slate-200/50 dark:border-slate-800/60 rounded-xl">
+              <table className="w-full text-left text-xs text-slate-500 dark:text-slate-400">
+                <thead className="bg-slate-550/5 text-2xs font-extrabold uppercase tracking-wider text-slate-400 border-b border-slate-200/50 dark:border-slate-800/60">
+                  <tr>
+                    <th className="px-4 py-2.5">Supplier</th>
+                    <th className="px-4 py-2.5 text-right">In Stock Qty</th>
+                    <th className="px-4 py-2.5 text-right">Cost Price</th>
+                    <th className="px-4 py-2.5">Batch Date</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
+                  {stockBatches.map((b: any) => (
+                    <tr key={b.id}>
+                      <td className="px-4 py-3 font-semibold text-slate-900 dark:text-slate-200">
+                        {b.supplierName}
+                      </td>
+                      <td className="px-4 py-3 text-right font-extrabold text-slate-800 dark:text-slate-200">
+                        {b.remainingQuantity}
+                      </td>
+                      <td className="px-4 py-3 text-right font-bold text-slate-700 dark:text-slate-300">
+                        NPR {(b.costPrice ?? 0).toFixed(2)}
+                      </td>
+                      <td className="px-4 py-3 text-slate-500">
+                        {new Date(b.transactionDate).toLocaleDateString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <div className="flex justify-end pt-4 border-t border-slate-100 dark:border-slate-800">
+            <Button variant="outline" onClick={() => { setOpenStockDetails(false); setSelectedStockProduct(null); setStockBatches([]); }}>
+              Close
+            </Button>
+          </div>
+        </div>
+      </Dialog>
     </div>
   );
 }

@@ -30,6 +30,8 @@ public static class SaleEndpoints
                 .Include(s => s.Customer)
                 .Include(s => s.Items)
                     .ThenInclude(si => si.Product)
+                .Include(s => s.Items)
+                    .ThenInclude(si => si.Supplier)
                 .AsNoTracking()
                 .AsQueryable();
 
@@ -82,19 +84,37 @@ public static class SaleEndpoints
             sale.SaleDate = DateTime.UtcNow;
             sale.Status = "Completed";
 
-            db.Sales.Add(sale);
+            var resolvedItems = new List<SaleItem>();
 
             foreach (var item in sale.Items)
             {
-                // Record stock transaction (Outgoing)
-                await invService.RecordTransactionAsync(
-                    item.ProductId,
-                    "Sale",
-                    0,
-                    item.Quantity,
-                    $"Sale Ref: {sale.SaleNumber}"
-                );
+                var allocations = await invService.DepleteStockFifoAsync(item.ProductId, item.Quantity, item.SupplierId > 0 ? item.SupplierId : null);
+                foreach (var allocation in allocations)
+                {
+                    resolvedItems.Add(new SaleItem
+                    {
+                        ProductId = item.ProductId,
+                        Quantity = allocation.Quantity,
+                        UnitPrice = item.UnitPrice,
+                        SupplierId = allocation.SupplierId,
+                        CostPrice = allocation.CostPrice
+                    });
+
+                    // Record stock transaction (Outgoing)
+                    await invService.RecordTransactionAsync(
+                        item.ProductId,
+                        "Sale",
+                        0,
+                        allocation.Quantity,
+                        $"Sale Ref: {sale.SaleNumber}",
+                        allocation.SupplierId,
+                        allocation.CostPrice
+                    );
+                }
             }
+
+            sale.Items = resolvedItems;
+            db.Sales.Add(sale);
 
             await db.SaveChangesAsync();
             return Results.Created($"/api/sales/{sale.Id}", sale);

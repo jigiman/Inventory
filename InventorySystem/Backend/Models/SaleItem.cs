@@ -19,4 +19,10 @@ public class SaleItem
 
     [Column(TypeName = "decimal(18,2)")]
     public decimal UnitPrice { get; set; }
+
+    public int? SupplierId { get; set; }
+    public Supplier? Supplier { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? CostPrice { get; set; }
 }

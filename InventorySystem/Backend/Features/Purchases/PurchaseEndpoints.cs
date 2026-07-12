@@ -101,7 +101,9 @@ public static class PurchaseEndpoints
                             "Purchase", 
                             rItem.QuantityReceived, 
                             0, 
-                            $"PO Ref: {po.OrderNumber}"
+                            $"PO Ref: {po.OrderNumber}",
+                            po.SupplierId,
+                            poItem.UnitPrice
                         );
                     }
                 }

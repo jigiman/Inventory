@@ -547,9 +547,9 @@ export default function Purchasing() {
                         </td>
                         <td className="px-4 py-3 text-right font-bold">{item.quantityOrdered}</td>
                         <td className="px-4 py-3 text-right font-bold">{item.quantityReceived}</td>
-                        <td className="px-4 py-3 text-right">NPR {(item.costPrice ?? 0).toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right">NPR {(item.unitPrice ?? item.costPrice ?? 0).toFixed(2)}</td>
                         <td className="px-4 py-3 text-right font-bold text-slate-900 dark:text-slate-200">
-                          NPR {((item.quantityOrdered ?? 0) * (item.costPrice ?? 0)).toFixed(2)}
+                          NPR {((item.quantityOrdered ?? 0) * (item.unitPrice ?? item.costPrice ?? 0)).toFixed(2)}
                         </td>
                       </tr>
                     ))}
@@ -641,7 +641,7 @@ export default function Purchasing() {
                 return {
                   productId: item.productId,
                   quantity: qty,
-                  costPrice: item.costPrice
+                  costPrice: item.unitPrice ?? item.costPrice
                 };
               }).filter(item => item.quantity > 0);
 
@@ -652,7 +652,7 @@ export default function Purchasing() {
 
               setSubmittingReturn(true);
               try {
-                const totalAmount = returnedItems.reduce((sum, item) => sum + (item.quantity * item.costPrice), 0);
+                const totalAmount = returnedItems.reduce((sum, item) => sum + (item.quantity * (item.costPrice ?? 0)), 0);
                 await api.createPurchaseReturn({
                   supplierId: selectedOrder.supplierId,
                   purchaseOrderId: selectedOrder.id,

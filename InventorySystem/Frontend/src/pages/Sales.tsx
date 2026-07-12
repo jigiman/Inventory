@@ -41,9 +41,20 @@ export default function Sales() {
 
   // New Sale Form States
   const [selectedCustomerId, setSelectedCustomerId] = useState<number>(0);
-  const [saleItems, setSaleItems] = useState<{ productId: number; quantity: number; unitPrice: number }[]>([
-    { productId: 0, quantity: 1, unitPrice: 0 }
+  const [saleItems, setSaleItems] = useState<{ productId: number; quantity: number; unitPrice: number; supplierId?: number }[]>([
+    { productId: 0, quantity: 1, unitPrice: 0, supplierId: 0 }
   ]);
+  const [availableBatches, setAvailableBatches] = useState<{ [productId: number]: any[] }>({});
+
+  const fetchBatchesForProduct = async (productId: number) => {
+    if (!productId || availableBatches[productId]) return;
+    try {
+      const batches = await api.getProductBatches(productId);
+      setAvailableBatches(prev => ({ ...prev, [productId]: batches }));
+    } catch (e) {
+      console.error('Failed to load batches for product', productId, e);
+    }
+  };
 
   // Inline Customer Creation States
   const [showAddCustomerInline, setShowAddCustomerInline] = useState(false);
@@ -210,9 +221,11 @@ export default function Sales() {
 
   const handleOpenCreate = () => {
     if (selectableProducts.length > 0) {
-      setSaleItems([{ productId: selectableProducts[0].id || 0, quantity: 1, unitPrice: selectableProducts[0].sellingPrice || 0 }]);
+      const initialProductId = selectableProducts[0].id || 0;
+      setSaleItems([{ productId: initialProductId, quantity: 1, unitPrice: selectableProducts[0].sellingPrice || 0, supplierId: 0 }]);
+      fetchBatchesForProduct(initialProductId);
     } else {
-      setSaleItems([{ productId: 0, quantity: 1, unitPrice: 0 }]);
+      setSaleItems([{ productId: 0, quantity: 1, unitPrice: 0, supplierId: 0 }]);
     }
     if (customers.length > 0) {
       setSelectedCustomerId(customers[0].id || 0);
@@ -223,7 +236,11 @@ export default function Sales() {
 
   const handleAddSaleItem = () => {
     const defaultProd = selectableProducts[0];
-    setSaleItems([...saleItems, { productId: defaultProd?.id || 0, quantity: 1, unitPrice: defaultProd?.sellingPrice || 0 }]);
+    const defaultProdId = defaultProd?.id || 0;
+    setSaleItems([...saleItems, { productId: defaultProdId, quantity: 1, unitPrice: defaultProd?.sellingPrice || 0, supplierId: 0 }]);
+    if (defaultProdId) {
+      fetchBatchesForProduct(defaultProdId);
+    }
   };
 
   const handleRemoveSaleItem = (index: number) => {
@@ -240,6 +257,8 @@ export default function Sales() {
       if (prod) {
         next[index].unitPrice = prod.sellingPrice;
       }
+      next[index].supplierId = 0;
+      fetchBatchesForProduct(value);
     }
     setSaleItems(next);
   };
@@ -253,7 +272,8 @@ export default function Sales() {
       const items: SaleItem[] = saleItems.map(i => ({
         productId: i.productId,
         quantity: i.quantity,
-        unitPrice: i.unitPrice
+        unitPrice: i.unitPrice,
+        supplierId: i.supplierId && i.supplierId > 0 ? i.supplierId : undefined
       }));
       const totalAmount = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
       await api.createSale({
@@ -513,7 +533,21 @@ export default function Sales() {
                       {selectableProducts.map(p => <option key={p.id} value={p.id}>{p.name}{p.sku ? ` (${p.sku})` : ''}</option>)}
                     </Select>
                   </div>
-                  <div className="w-24">
+                  <div className="flex-1">
+                    <Select
+                      label="Supplier Stock"
+                      value={item.supplierId || 0}
+                      onChange={(e) => handleSaleItemChange(idx, 'supplierId', Number(e.target.value))}
+                    >
+                      <option value="0">Auto (FIFO)</option>
+                      {(availableBatches[item.productId] || []).map((b: any, bIdx: number) => (
+                        <option key={bIdx} value={b.supplierId}>
+                          {b.supplierName} ({b.remainingQuantity} left @ NPR {b.costPrice})
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                  <div className="w-20">
                     <Input
                       label="Qty"
                       type="number"
@@ -522,7 +556,7 @@ export default function Sales() {
                       onChange={(e) => handleSaleItemChange(idx, 'quantity', parseFloat(e.target.value) || 0)}
                     />
                   </div>
-                  <div className="w-32">
+                  <div className="w-28">
                     <Input
                       label="Price"
                       type="number"
@@ -631,7 +665,10 @@ export default function Sales() {
                       <tr key={item.id}>
                         <td className="px-4 py-3 font-semibold text-slate-900 dark:text-slate-200">
                           {item.product?.name}
-                          {item.product?.sku && <span className="block text-3xs font-normal font-mono text-slate-400 mt-0.5">{item.product.sku}</span>}
+                          <div className="flex gap-2 text-3xs font-normal font-mono text-slate-400 mt-0.5">
+                            {item.product?.sku && <span>SKU: {item.product.sku}</span>}
+                            {item.supplier?.name && <span className="text-indigo-500 font-sans font-medium">Supplier: {item.supplier.name}</span>}
+                          </div>
                         </td>
                         <td className="px-4 py-3 text-right font-bold">{item.quantity}</td>
                         <td className="px-4 py-3 text-right">NPR {(item.unitPrice ?? 0).toFixed(2)}</td>

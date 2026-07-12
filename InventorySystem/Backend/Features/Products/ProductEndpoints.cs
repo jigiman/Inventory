@@ -228,5 +228,24 @@ public static class ProductEndpoints
             await db.SaveChangesAsync();
             return Results.NoContent();
         });
+
+        app.MapGet("/api/products/{id:int}/batches", async (AppDbContext db, int id) =>
+        {
+            var batches = await db.StockTransactions
+                .Where(t => t.ProductId == id && t.QuantityIn > 0 && t.RemainingQuantity > 0)
+                .Include(t => t.Supplier)
+                .OrderBy(t => t.TransactionDate)
+                .ThenBy(t => t.Id)
+                .Select(t => new {
+                    t.Id,
+                    t.SupplierId,
+                    SupplierName = t.Supplier != null ? t.Supplier.Name : "Opening Stock / Unknown",
+                    t.RemainingQuantity,
+                    t.CostPrice,
+                    t.TransactionDate
+                })
+                .ToListAsync();
+            return Results.Ok(batches);
+        });
     }
 }

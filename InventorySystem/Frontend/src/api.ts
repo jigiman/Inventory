@@ -167,6 +167,7 @@ export interface PurchaseItem {
   quantityOrdered: number;
   quantityReceived: number;
   costPrice: number;
+  unitPrice?: number;
 }
 
 export interface PurchaseOrder {
@@ -186,6 +187,9 @@ export interface SaleItem {
   product?: Product;
   quantity: number;
   unitPrice: number;
+  supplierId?: number;
+  supplier?: Supplier;
+  costPrice?: number;
 }
 
 export interface Sale {
@@ -364,6 +368,7 @@ export const api = {
   createProduct: (product: Product) => request<Product>('/api/products', { method: 'POST', body: JSON.stringify(product) }),
   updateProduct: (id: number, product: Product) => request<Product>(`/api/products/${id}`, { method: 'PUT', body: JSON.stringify(product) }),
   deleteProduct: (id: number) => request<void>(`/api/products/${id}`, { method: 'DELETE' }),
+  getProductBatches: (id: number) => request<any[]>(`/api/products/${id}/batches`),
 
   // Purchase Orders
   getPurchaseOrders: (params?: { page?: number; pageSize?: number; search?: string; status?: string; startDate?: string; endDate?: string }) => {
