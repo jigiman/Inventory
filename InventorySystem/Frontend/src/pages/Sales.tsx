@@ -91,6 +91,7 @@ export default function Sales() {
   const [pageSize] = useState(25);
 
   async function loadSales() {
+    console.log('loadSales() invoked');
     setLoading(true);
     setError('');
     try {
@@ -264,6 +265,7 @@ export default function Sales() {
   };
 
   const handleSaveSale = async () => {
+    console.log('handleSaveSale() invoked');
     if (saleItems.some(i => i.productId === 0 || i.quantity <= 0)) {
       alert('Please check all items have valid products and quantities.');
       return;
@@ -281,8 +283,10 @@ export default function Sales() {
         items,
         totalAmount
       });
+      console.log('api.createSale successful, calling loadData and loadSales');
       setOpenCreate(false);
       loadData();
+      loadSales();
     } catch (err: any) {
       alert(err.message || 'Failed to create Sale');
     }

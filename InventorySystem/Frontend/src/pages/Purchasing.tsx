@@ -198,6 +198,7 @@ export default function Purchasing() {
       });
       setOpenCreate(false);
       loadData();
+      loadOrders();
     } catch (err: any) {
       alert(err.message || 'Failed to create Purchase Order');
     }

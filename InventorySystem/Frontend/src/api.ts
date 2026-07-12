@@ -60,11 +60,13 @@ const memoryCache = new Map<string, CacheEntry<any>>();
 const CACHE_TTL = 30000; // 30 seconds
 
 export function clearCache() {
+  console.log('API CACHE CLEARED');
   memoryCache.clear();
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const isGet = !options || !options.method || options.method.toUpperCase() === 'GET';
+  console.log(`API REQUEST: ${isGet ? 'GET' : options?.method} ${path}`);
   
   // Skip caching launcher configuration checks
   const isLauncher = path.startsWith('/api/launcher');
@@ -73,16 +75,21 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     if (!isGet) {
       clearCache();
     }
-    return requestRaw<T>(path, options);
+    const res = await requestRaw<T>(path, options);
+    console.log(`API REQUEST SUCCESS (RAW): ${path}`);
+    return res;
   }
 
   const cacheKey = path;
   const cached = memoryCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    console.log(`API REQUEST CACHE HIT: ${path}`);
     return Promise.resolve(cached.data);
   }
 
+  console.log(`API REQUEST CACHE MISS: ${path}`);
   const data = await requestRaw<T>(path, options);
+  console.log(`API REQUEST SUCCESS: ${path}`);
   memoryCache.set(cacheKey, { data, timestamp: Date.now() });
   return data;
 }
