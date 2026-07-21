@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
-import { Box, Button, Dialog, DialogTitle, DialogContent, DialogActions, Grid, FormControl, InputLabel, Select, MenuItem, TextField, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Typography, CircularProgress, Alert, IconButton } from '@mui/material';
-import DeleteIcon from '@mui/icons-material/Delete';
-import AddIcon from '@mui/icons-material/Add';
+import { useState, useEffect, useMemo } from 'react';
+import { Trash2, Plus, ArrowDownRight, Clipboard, Eye } from 'lucide-react';
 import { api } from '../api';
 import type { PurchaseOrder, Supplier, Product, PurchaseItem } from '../api';
+import { Button } from '../components/ui/Button';
+import { Dialog } from '../components/ui/Dialog';
+import { Input } from '../components/ui/Input';
+import { Select } from '../components/ui/Select';
 
 export default function Purchasing() {
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
@@ -12,9 +14,41 @@ export default function Purchasing() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  const selectableProducts = useMemo(() => {
+    return products.flatMap(p => 
+      p.variants && p.variants.length > 0 
+        ? p.variants.map(v => ({ 
+            id: v.id, 
+            name: `${p.name} (${v.variantValues})`, 
+            sku: v.sku, 
+            costPrice: v.costPrice, 
+            sellingPrice: v.sellingPrice 
+          }))
+        : [{ 
+            id: p.id, 
+            name: p.name, 
+            sku: p.sku, 
+            costPrice: p.costPrice, 
+            sellingPrice: p.sellingPrice 
+          }]
+    );
+  }, [products]);
+
+  // Search & Filter States
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState('All');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
+  // Pagination States
+  const [totalCount, setTotalCount] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(25);
+
   // Dialog States
   const [openCreate, setOpenCreate] = useState(false);
   const [openReceive, setOpenReceive] = useState(false);
+  const [openDetails, setOpenDetails] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<PurchaseOrder | null>(null);
 
   // New PO Form States
@@ -26,23 +60,47 @@ export default function Purchasing() {
   // Receive Form States
   const [receiveQuantities, setReceiveQuantities] = useState<{ [productId: number]: number }>({});
 
-  async function loadData() {
+  // Return States
+  const [purchaseReturns, setPurchaseReturns] = useState<any[]>([]);
+  const [loadingReturns, setLoadingReturns] = useState(false);
+  const [openReturn, setOpenReturn] = useState(false);
+  const [returnQuantities, setReturnQuantities] = useState<{ [productId: number]: number }>({});
+  const [returnNotes, setReturnNotes] = useState('');
+  const [submittingReturn, setSubmittingReturn] = useState(false);
+
+  async function loadOrders() {
     setLoading(true);
     setError('');
     try {
-      const [pos, sups, prods] = await Promise.all([
-        api.getPurchaseOrders(),
+      const result = await api.getPurchaseOrders({
+        page: currentPage,
+        pageSize: pageSize,
+        search: searchQuery || undefined,
+        status: filterStatus,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined
+      });
+      setOrders(result.items);
+      setTotalCount(result.totalCount);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load purchase orders');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadData() {
+    setError('');
+    try {
+      const [sups, prods] = await Promise.all([
         api.getSuppliers(),
-        api.getProducts(),
+        api.getProducts(1, 1000),
       ]);
-      setOrders(pos);
       setSuppliers(sups);
-      setProducts(prods);
+      setProducts(prods.items);
       if (sups.length > 0) setSelectedSupplierId(sups[0].id!);
     } catch (err: any) {
       setError(err.message || 'Failed to load purchasing data');
-    } finally {
-      setLoading(false);
     }
   }
 
@@ -50,8 +108,55 @@ export default function Purchasing() {
     loadData();
   }, []);
 
+  useEffect(() => {
+    if (currentPage !== 1) {
+      setCurrentPage(1);
+    } else {
+      loadOrders();
+    }
+  }, [searchQuery, filterStatus, startDate, endDate]);
+
+  useEffect(() => {
+    loadOrders();
+  }, [currentPage]);
+
+  async function loadReturns() {
+    if (!selectedOrder) return;
+    setLoadingReturns(true);
+    try {
+      const data = await api.getPurchaseReturns({ purchaseOrderId: selectedOrder.id });
+      setPurchaseReturns(data);
+    } catch (e) {
+      console.error('Failed to load purchase returns', e);
+    } finally {
+      setLoadingReturns(false);
+    }
+  }
+
+  useEffect(() => {
+    if (selectedOrder && openDetails) {
+      loadReturns();
+    } else {
+      setPurchaseReturns([]);
+    }
+  }, [selectedOrder, openDetails]);
+
+  const totalReturned = purchaseReturns.reduce((sum, r) => sum + r.totalAmount, 0);
+
+  const handleOpenCreate = () => {
+    if (selectableProducts.length > 0) {
+      setPoItems([{ productId: selectableProducts[0].id || 0, quantityOrdered: 1, costPrice: selectableProducts[0].costPrice || 0 }]);
+    } else {
+      setPoItems([{ productId: 0, quantityOrdered: 1, costPrice: 0 }]);
+    }
+    if (suppliers.length > 0) {
+      setSelectedSupplierId(suppliers[0].id || 0);
+    }
+    setOpenCreate(true);
+  };
+
   const handleAddPoItem = () => {
-    setPoItems([...poItems, { productId: products[0]?.id || 0, quantityOrdered: 1, costPrice: products[0]?.costPrice || 0 }]);
+    setPoItems([...poItems, { productId: selectableProducts[0]?.id || 0, quantityOrdered: 1, costPrice: selectableProducts[0]?.costPrice || 0 }]);
   };
 
   const handleRemovePoItem = (index: number) => {
@@ -64,7 +169,7 @@ export default function Purchasing() {
     const next = [...poItems];
     next[index] = { ...next[index], [field]: value };
     if (field === 'productId') {
-      const prod = products.find(p => p.id === value);
+      const prod = selectableProducts.find(p => p.id === value);
       if (prod) {
         next[index].costPrice = prod.costPrice;
       }
@@ -82,14 +187,18 @@ export default function Purchasing() {
         productId: i.productId,
         quantityOrdered: i.quantityOrdered,
         quantityReceived: 0,
-        costPrice: i.costPrice
+        costPrice: i.costPrice,
+        unitPrice: i.costPrice // Using costPrice as unitPrice for simplicity in the PO
       }));
+      const totalAmount = items.reduce((sum, item) => sum + (item.quantityOrdered * item.costPrice), 0);
       await api.createPurchaseOrder({
         supplierId: selectedSupplierId,
-        items
+        items,
+        totalAmount
       });
       setOpenCreate(false);
       loadData();
+      loadOrders();
     } catch (err: any) {
       alert(err.message || 'Failed to create Purchase Order');
     }
@@ -121,144 +230,499 @@ export default function Purchasing() {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" sx={{ fontWeight: 600 }}>Purchasing (Purchase Orders)</Typography>
-        <Button variant="contained" onClick={() => setOpenCreate(true)} disabled={suppliers.length === 0 || products.length === 0}>
-          New Purchase Order
+    <div className="space-y-4">
+      <div className="flex justify-end items-center">
+        <Button onClick={handleOpenCreate} disabled={suppliers.length === 0 || products.length === 0} className="inline-flex items-center space-x-2">
+          <Plus size={16} />
+          <span>New Purchase Order</span>
         </Button>
-      </Box>
+      </div>
 
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-650 dark:border-red-900/50 dark:bg-red-950/20 dark:text-red-400">
+          {error}
+        </div>
+      )}
+
+      {/* Search & Filter Bar */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-50 dark:bg-slate-900/40 p-4 rounded-2xl border border-slate-200/50 dark:border-slate-800/60">
+        <Input
+          label="Search Purchase Order"
+          placeholder="PO # or Supplier Name..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onClear={() => setSearchQuery('')}
+        />
+        <Select
+          label="Status"
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+        >
+          <option value="All">All Statuses</option>
+          <option value="Pending">Pending</option>
+          <option value="Received">Received</option>
+        </Select>
+        <Input
+          label="From Date"
+          type="date"
+          value={startDate}
+          onChange={(e) => setStartDate(e.target.value)}
+        />
+        <Input
+          label="To Date"
+          type="date"
+          value={endDate}
+          onChange={(e) => setEndDate(e.target.value)}
+        />
+      </div>
 
       {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress /></Box>
+        <div className="flex h-[300px] items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-650 border-t-transparent dark:border-indigo-400" />
+        </div>
       ) : (
-        <TableContainer component={Paper} sx={{ boxShadow: 'var(--shadow-md)' }}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Order Number</TableCell>
-                <TableCell>Supplier</TableCell>
-                <TableCell>Order Date</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
+        <div className="overflow-x-auto border-t border-slate-200/50 dark:border-slate-800/60">
+          <table className="w-full text-left text-sm text-slate-500 dark:text-slate-400">
+            <thead className="bg-slate-550/5 text-2xs font-extrabold uppercase tracking-wider text-slate-400 dark:bg-slate-900/40 border-b border-slate-200/50 dark:border-slate-800/60">
+              <tr>
+                <th className="px-6 py-4">Order Number</th>
+                <th className="px-6 py-4">Supplier</th>
+                <th className="px-6 py-4">Order Date</th>
+                <th className="px-6 py-4">Status</th>
+                <th className="px-6 py-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
               {orders.map((order) => (
-                <TableRow key={order.id}>
-                  <TableCell>{order.orderNumber}</TableCell>
-                  <TableCell>{order.supplier?.name}</TableCell>
-                  <TableCell>{order.orderDate ? new Date(order.orderDate).toLocaleDateString() : ''}</TableCell>
-                  <TableCell>
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        color: order.status === 'Received' ? 'success.main' : 'warning.main',
-                        fontWeight: 'bold'
-                      }}
+                <tr key={order.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/10 transition-colors">
+                  <td className="px-6 py-4 font-bold text-slate-900 dark:text-slate-200">{order.orderNumber}</td>
+                  <td className="px-6 py-4 font-medium">{order.supplier?.name}</td>
+                  <td className="px-6 py-4 text-slate-450">{order.orderDate ? new Date(order.orderDate).toLocaleDateString() : ''}</td>
+                  <td className="px-6 py-4">
+                    <span
+                      className={`text-3xs font-extrabold uppercase tracking-wide px-2.5 py-0.5 rounded-full border ${
+                        order.status === 'Received'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-250/10 dark:bg-emerald-950/20 dark:text-emerald-400'
+                          : 'bg-amber-50 text-amber-700 border-amber-250/10 dark:bg-amber-950/20 dark:text-amber-400'
+                      }`}
                     >
                       {order.status}
-                    </Typography>
-                  </TableCell>
-                  <TableCell align="right">
-                    {order.status !== 'Received' && (
-                      <Button variant="outlined" size="small" onClick={() => handleOpenReceive(order)}>
-                        Receive Items
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex justify-end items-center space-x-2">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => { setSelectedOrder(order); setOpenDetails(true); }}
+                        className="inline-flex items-center space-x-1.5 cursor-pointer"
+                      >
+                        <Eye size={14} />
+                        <span>Details</span>
                       </Button>
-                    )}
-                  </TableCell>
-                </TableRow>
+                      {order.status !== 'Received' ? (
+                        <Button variant="outline" size="sm" onClick={() => handleOpenReceive(order)} className="inline-flex items-center space-x-1.5">
+                          <ArrowDownRight size={14} />
+                          <span>Receive Items</span>
+                        </Button>
+                      ) : (
+                        <span className="inline-flex items-center text-xs font-semibold text-slate-400 space-x-1 px-3">
+                          <Clipboard size={14} />
+                          <span>Completed</span>
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                </tr>
               ))}
               {orders.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={5} align="center">No Purchase Orders created yet.</TableCell>
-                </TableRow>
+                <tr>
+                  <td colSpan={5} className="py-12 text-center text-slate-400 font-medium">
+                    No purchase orders matching filters found.
+                  </td>
+                </tr>
               )}
-            </TableBody>
-          </Table>
-        </TableContainer>
+            </tbody>
+          </table>
+
+          {/* Pagination Controls */}
+          <div className="flex justify-between items-center bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200/50 dark:border-slate-800/60 text-xs mt-4">
+            <span className="text-slate-550 dark:text-slate-400 font-medium">
+              Showing {orders.length} of {totalCount} purchase orders
+            </span>
+            <div className="flex space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              >
+                Previous
+              </Button>
+              <span className="flex items-center px-3 font-bold text-slate-700 dark:text-slate-300">
+                Page {currentPage} of {Math.max(1, Math.ceil(totalCount / pageSize))}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage >= Math.ceil(totalCount / pageSize)}
+                onClick={() => setCurrentPage(prev => prev + 1)}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Create PO Dialog */}
-      <Dialog open={openCreate} onClose={() => setOpenCreate(false)} maxWidth="md" fullWidth>
-        <DialogTitle>Create Purchase Order</DialogTitle>
-        <DialogContent dividers>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, mt: 1 }}>
-            <FormControl fullWidth>
-              <InputLabel>Supplier</InputLabel>
-              <Select value={selectedSupplierId} label="Supplier" onChange={(e) => setSelectedSupplierId(Number(e.target.value))}>
-                {suppliers.map(s => <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>)}
-              </Select>
-            </FormControl>
+      <Dialog open={openCreate} onClose={() => setOpenCreate(false)} title="Create Purchase Order" size="lg">
+        <form onSubmit={(e) => { e.preventDefault(); handleSavePo(); }} className="space-y-6">
+          <Select
+            label="Supplier"
+            value={selectedSupplierId}
+            onChange={(e) => setSelectedSupplierId(Number(e.target.value))}
+          >
+            {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </Select>
 
-            <Typography variant="h6">Items</Typography>
-
-            {poItems.map((item, idx) => (
-              <Grid container spacing={2} key={idx} alignItems="center">
-                <Grid item xs={6}>
-                  <FormControl fullWidth>
-                    <InputLabel>Product</InputLabel>
-                    <Select value={item.productId} label="Product" onChange={(e) => handlePoItemChange(idx, 'productId', Number(e.target.value))}>
-                      {products.map(p => <MenuItem key={p.id} value={p.id}>{p.name} ({p.sku})</MenuItem>)}
+          <div className="border-t border-slate-100 dark:border-slate-800 pt-5">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-4">Items to Order</h3>
+            
+            <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
+              {poItems.map((item, idx) => (
+                <div key={idx} className="flex gap-4 items-end">
+                  <div className="flex-1">
+                    <Select
+                      label="Product"
+                      value={item.productId}
+                      onChange={(e) => handlePoItemChange(idx, 'productId', Number(e.target.value))}
+                    >
+                      {selectableProducts.map(p => <option key={p.id} value={p.id}>{p.name}{p.sku ? ` (${p.sku})` : ''}</option>)}
                     </Select>
-                  </FormControl>
-                </Grid>
-                <Grid item xs={2}>
-                  <TextField label="Qty" type="number" fullWidth value={item.quantityOrdered} onChange={(e) => handlePoItemChange(idx, 'quantityOrdered', parseFloat(e.target.value) || 0)} />
-                </Grid>
-                <Grid item xs={3}>
-                  <TextField label="Cost" type="number" fullWidth slotProps={{ htmlInput: { step: '0.01' } }} value={item.costPrice} onChange={(e) => handlePoItemChange(idx, 'costPrice', parseFloat(e.target.value) || 0)} />
-                </Grid>
-                <Grid item xs={1}>
-                  <IconButton color="error" onClick={() => handleRemovePoItem(idx)} disabled={poItems.length === 1}>
-                    <DeleteIcon />
-                  </IconButton>
-                </Grid>
-              </Grid>
-            ))}
+                  </div>
+                  <div className="w-24">
+                    <Input
+                      label="Qty"
+                      type="number"
+                      min="1"
+                      value={item.quantityOrdered}
+                      onChange={(e) => handlePoItemChange(idx, 'quantityOrdered', parseFloat(e.target.value) || 0)}
+                    />
+                  </div>
+                  <div className="w-32">
+                    <Input
+                      label="Cost"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={item.costPrice}
+                      onChange={(e) => handlePoItemChange(idx, 'costPrice', parseFloat(e.target.value) || 0)}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleRemovePoItem(idx)}
+                    disabled={poItems.length === 1}
+                    className="p-2.5 mb-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 disabled:opacity-50 rounded-xl cursor-pointer transition-colors"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
 
-            <Button startIcon={<AddIcon />} onClick={handleAddPoItem} sx={{ alignSelf: 'flex-start' }}>
-              Add Item
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-4 inline-flex items-center space-x-1.5"
+              onClick={handleAddPoItem}
+            >
+              <Plus size={14} />
+              <span>Add Item</span>
             </Button>
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenCreate(false)}>Cancel</Button>
-          <Button onClick={handleSavePo} variant="contained">Create Order</Button>
-        </DialogActions>
+          </div>
+
+          <div className="flex justify-end space-x-3 pt-5 border-t border-slate-100 dark:border-slate-800">
+            <Button type="button" variant="outline" onClick={() => setOpenCreate(false)}>Cancel</Button>
+            <Button type="submit">Create Order</Button>
+          </div>
+        </form>
       </Dialog>
 
       {/* Receive PO Dialog */}
-      <Dialog open={openReceive} onClose={() => setOpenReceive(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Receive Purchase Order: {selectedOrder?.orderNumber}</DialogTitle>
-        <DialogContent dividers>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+      <Dialog open={openReceive} onClose={() => setOpenReceive(false)} title={`Receive Purchase Order: ${selectedOrder?.orderNumber}`} size="md">
+        <form onSubmit={(e) => { e.preventDefault(); handleSaveReceive(); }} className="space-y-6">
+          <div className="space-y-4 max-h-[350px] overflow-y-auto pr-1">
             {selectedOrder?.items.map(item => (
-              <Grid container spacing={2} key={item.productId} alignItems="center">
-                <Grid item xs={6}>
-                  <Typography variant="body1">{item.product?.name}</Typography>
-                  <Typography variant="caption" color="textSecondary">Ordered: {item.quantityOrdered}</Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <TextField
-                    label="Quantity Received"
+              <div key={item.productId} className="flex gap-4 items-center justify-between py-3.5 border-b border-slate-100 dark:border-slate-800/40">
+                <div className="flex-1">
+                  <p className="font-bold text-slate-805 dark:text-slate-200">{item.product?.name}</p>
+                  <p className="text-xs text-slate-400 font-semibold mt-0.5">Ordered Qty: {item.quantityOrdered}</p>
+                </div>
+                <div className="w-40">
+                  <Input
+                    label="Received Qty"
                     type="number"
-                    fullWidth
+                    min="0"
                     value={receiveQuantities[item.productId] ?? 0}
                     onChange={(e) => setReceiveQuantities({ ...receiveQuantities, [item.productId]: parseFloat(e.target.value) || 0 })}
                   />
-                </Grid>
-              </Grid>
+                </div>
+              </div>
             ))}
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenReceive(false)}>Cancel</Button>
-          <Button onClick={handleSaveReceive} variant="contained">Post to Inventory</Button>
-        </DialogActions>
+          </div>
+
+          <div className="flex justify-end space-x-3 pt-5 border-t border-slate-100 dark:border-slate-800">
+            <Button type="button" variant="outline" onClick={() => setOpenReceive(false)}>Cancel</Button>
+            <Button type="submit">Post to Inventory</Button>
+          </div>
+        </form>
       </Dialog>
-    </Box>
+
+      {/* View PO Details Dialog */}
+      {selectedOrder && openDetails && (
+        <Dialog 
+          open={openDetails} 
+          onClose={() => { setOpenDetails(false); setSelectedOrder(null); }} 
+          title={`Purchase Order: ${selectedOrder.orderNumber}`} 
+          size="md"
+        >
+          <div className="space-y-6 text-sm">
+            <div className="grid grid-cols-2 gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Order Date</p>
+                <p className="mt-1 font-semibold text-slate-900 dark:text-slate-100">
+                  {selectedOrder.orderDate ? new Date(selectedOrder.orderDate).toLocaleString() : '-'}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Status</p>
+                <p className="mt-1">
+                  <span className={`inline-block text-3xs font-extrabold uppercase tracking-wide px-2.5 py-0.5 rounded-full border ${
+                    selectedOrder.status === 'Received'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-250/10 dark:bg-emerald-950/20 dark:text-emerald-400'
+                      : 'bg-amber-50 text-amber-700 border-amber-250/10 dark:bg-amber-950/20 dark:text-amber-400'
+                  }`}>
+                    {selectedOrder.status}
+                  </span>
+                </p>
+              </div>
+            </div>
+
+            <div className="border-b border-slate-100 dark:border-slate-800 pb-4">
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Supplier Details</p>
+              <div className="bg-slate-50 dark:bg-slate-950/40 border border-slate-200/40 dark:border-slate-800 rounded-xl p-3.5 space-y-1">
+                <p className="font-bold text-slate-900 dark:text-slate-100">{selectedOrder.supplier?.name}</p>
+                {selectedOrder.supplier?.contactPerson && (
+                  <p className="text-xs text-slate-550 dark:text-slate-400">Contact: {selectedOrder.supplier.contactPerson}</p>
+                )}
+                {selectedOrder.supplier?.phone && (
+                  <p className="text-xs text-slate-550 dark:text-slate-400">Phone: {selectedOrder.supplier.phone}</p>
+                )}
+                {selectedOrder.supplier?.email && (
+                  <p className="text-xs text-slate-550 dark:text-slate-400">Email: {selectedOrder.supplier.email}</p>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Order Items</p>
+              <div className="overflow-hidden border border-slate-200/50 dark:border-slate-800/60 rounded-xl">
+                <table className="w-full text-left text-xs text-slate-500 dark:text-slate-400">
+                  <thead className="bg-slate-50 dark:bg-slate-900/40 text-2xs font-extrabold uppercase tracking-wider text-slate-400 border-b border-slate-200/50 dark:border-slate-800/60">
+                    <tr>
+                      <th className="px-4 py-2.5">Product</th>
+                      <th className="px-4 py-2.5 text-right">Qty Ordered</th>
+                      <th className="px-4 py-2.5 text-right">Qty Received</th>
+                      <th className="px-4 py-2.5 text-right">Cost Price</th>
+                      <th className="px-4 py-2.5 text-right">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
+                    {selectedOrder.items.map((item) => (
+                      <tr key={item.id}>
+                        <td className="px-4 py-3 font-semibold text-slate-900 dark:text-slate-200">
+                          {item.product?.name}
+                          {item.product?.sku && <span className="block text-3xs font-normal font-mono text-slate-400 mt-0.5">{item.product.sku}</span>}
+                        </td>
+                        <td className="px-4 py-3 text-right font-bold">{item.quantityOrdered}</td>
+                        <td className="px-4 py-3 text-right font-bold">{item.quantityReceived}</td>
+                        <td className="px-4 py-3 text-right">NPR {(item.unitPrice ?? item.costPrice ?? 0).toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right font-bold text-slate-900 dark:text-slate-200">
+                          NPR {((item.quantityOrdered ?? 0) * (item.unitPrice ?? item.costPrice ?? 0)).toFixed(2)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="flex justify-between items-center bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100/50 dark:border-indigo-900/40 rounded-xl p-4">
+              <span className="text-xs font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400">Total Amount</span>
+              <span className="text-lg font-extrabold text-indigo-700 dark:text-indigo-400">
+                NPR {selectedOrder.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
+
+            {/* Returns History Section */}
+            {selectedOrder.status === 'Received' && (
+              <div className="border-t border-slate-100 dark:border-slate-800 pt-4">
+                <div className="flex justify-between items-center mb-3">
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Returns History</p>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => {
+                      const initQties: { [productId: number]: number } = {};
+                      selectedOrder.items.forEach(item => {
+                        initQties[item.productId] = 0;
+                      });
+                      setReturnQuantities(initQties);
+                      setReturnNotes('');
+                      setOpenReturn(true);
+                    }}
+                    className="cursor-pointer"
+                  >
+                    <Plus size={14} className="mr-1" />
+                    <span>Record Return</span>
+                  </Button>
+                </div>
+
+                {loadingReturns ? (
+                  <p className="text-xs text-slate-400">Loading returns...</p>
+                ) : purchaseReturns.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic">No returns recorded yet.</p>
+                ) : (
+                  <div className="space-y-2 mb-3">
+                    <div className="max-h-[150px] overflow-y-auto pr-1 space-y-2">
+                      {purchaseReturns.map((r) => (
+                        <div key={r.id} className="flex justify-between items-center bg-slate-50 dark:bg-slate-950/20 border border-slate-200/40 dark:border-slate-800 rounded-xl p-2.5 text-xs">
+                          <div>
+                            <span className="font-bold text-slate-900 dark:text-slate-200">{r.returnNumber}</span>
+                            <span className="text-slate-400 mx-1.5">|</span>
+                            <span className="text-rose-600 dark:text-rose-400 font-bold">NPR {(r.totalAmount ?? 0).toFixed(2)}</span>
+                            {r.notes && <span className="text-slate-400 ml-2">({r.notes})</span>}
+                          </div>
+                          <span className="text-slate-400 font-medium">{new Date(r.returnDate).toLocaleDateString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex justify-between text-xs font-bold pt-2.5 border-t border-slate-150 dark:border-slate-800">
+                      <span className="text-slate-400">Total Returned:</span>
+                      <span className="text-rose-600">NPR {totalReturned.toFixed(2)}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex justify-end pt-4 border-t border-slate-100 dark:border-slate-800">
+              <Button onClick={() => { setOpenDetails(false); setSelectedOrder(null); }}>Close</Button>
+            </div>
+          </div>
+        </Dialog>
+      )}
+
+      {/* Return Purchase Items Dialog */}
+      {selectedOrder && openReturn && (
+        <Dialog
+          open={openReturn}
+          onClose={() => setOpenReturn(false)}
+          title={`Return Items for Purchase Order: ${selectedOrder.orderNumber}`}
+          size="md"
+        >
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              const returnedItems = selectedOrder.items.map(item => {
+                const qty = returnQuantities[item.productId] ?? 0;
+                return {
+                  productId: item.productId,
+                  quantity: qty,
+                  costPrice: item.unitPrice ?? item.costPrice
+                };
+              }).filter(item => item.quantity > 0);
+
+              if (returnedItems.length === 0) {
+                alert('Please specify return quantity greater than zero for at least one product.');
+                return;
+              }
+
+              setSubmittingReturn(true);
+              try {
+                const totalAmount = returnedItems.reduce((sum, item) => sum + (item.quantity * (item.costPrice ?? 0)), 0);
+                await api.createPurchaseReturn({
+                  supplierId: selectedOrder.supplierId,
+                  purchaseOrderId: selectedOrder.id,
+                  totalAmount,
+                  notes: returnNotes,
+                  items: returnedItems
+                });
+                setOpenReturn(false);
+                await loadReturns();
+                await loadData();
+              } catch (err: any) {
+                alert(err.message || 'Failed to record purchase return');
+              } finally {
+                setSubmittingReturn(false);
+              }
+            }}
+            className="space-y-6"
+          >
+            <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
+              {selectedOrder.items.map(item => {
+                const prevReturnedQty = purchaseReturns.reduce((sum, ret) => {
+                  const retItem = ret.items?.find((ri: any) => ri.productId === item.productId);
+                  return sum + (retItem?.quantity ?? 0);
+                }, 0);
+                const maxReturn = item.quantityReceived - prevReturnedQty;
+
+                return (
+                  <div key={item.productId} className="flex gap-4 items-center justify-between py-3 border-b border-slate-100 dark:border-slate-800/40">
+                    <div className="flex-1">
+                      <p className="font-bold text-slate-850 dark:text-slate-200">{item.product?.name}</p>
+                      <p className="text-xs text-slate-400 font-semibold mt-0.5">
+                        Received: {item.quantityReceived} | Already Returned: {prevReturnedQty}
+                      </p>
+                    </div>
+                    <div className="w-32">
+                      <Input
+                        label="Return Qty"
+                        type="number"
+                        min="0"
+                        max={maxReturn}
+                        step="0.01"
+                        value={returnQuantities[item.productId] ?? 0}
+                        onChange={(e) => setReturnQuantities({ ...returnQuantities, [item.productId]: parseFloat(e.target.value) || 0 })}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <Input
+              label="Return Notes"
+              placeholder="Reason for return, condition of items, etc."
+              value={returnNotes}
+              onChange={(e) => setReturnNotes(e.target.value)}
+            />
+
+            <div className="flex justify-end space-x-3 pt-5 border-t border-slate-100 dark:border-slate-800">
+              <Button type="button" variant="outline" onClick={() => setOpenReturn(false)} disabled={submittingReturn}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={submittingReturn}>
+                {submittingReturn ? 'Saving...' : 'Submit Return'}
+              </Button>
+            </div>
+          </form>
+        </Dialog>
+      )}
+    </div>
   );
 }

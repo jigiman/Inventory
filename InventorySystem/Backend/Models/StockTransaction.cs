@@ -20,5 +20,13 @@ public class StockTransaction
     public decimal QuantityOut { get; set; }
     public decimal RunningBalance { get; set; }
     
+    public decimal RemainingQuantity { get; set; }
+    
+    public int? SupplierId { get; set; }
+    public Supplier? Supplier { get; set; }
+    
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? CostPrice { get; set; }
+    
     public DateTime TransactionDate { get; set; }
 }

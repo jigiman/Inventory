@@ -55,6 +55,19 @@ public static class DbSeeder
         db.Suppliers.AddRange(suppliers);
         await db.SaveChangesAsync();
 
+        // 4.5. Customers
+        var defaultCustomer = new Customer
+        {
+            Name = "Walk-in Customer",
+            ContactPerson = "N/A",
+            Phone = "N/A",
+            Email = "walkin@store.com",
+            Address = "N/A",
+            Notes = "Default customer for quick retail sales"
+        };
+        db.Customers.Add(defaultCustomer);
+        await db.SaveChangesAsync();
+
         // 5. Products
         var products = new List<Product>
         {
@@ -73,7 +86,6 @@ public static class DbSeeder
                 CurrentQuantity = 10,
                 ReorderLevel = 3,
                 MaximumStock = 20,
-                ShelfLocation = "A-12",
                 LeadTime = 5,
                 IsActive = true
             },
@@ -92,7 +104,6 @@ public static class DbSeeder
                 CurrentQuantity = 15,
                 ReorderLevel = 5,
                 MaximumStock = 30,
-                ShelfLocation = "B-04",
                 LeadTime = 10,
                 IsActive = true
             },
@@ -111,7 +122,6 @@ public static class DbSeeder
                 CurrentQuantity = 50,
                 ReorderLevel = 10,
                 MaximumStock = 100,
-                ShelfLocation = "C-01",
                 LeadTime = 3,
                 IsActive = true
             }

@@ -7,7 +7,6 @@ public class Product
 {
     public int Id { get; set; }
     
-    [Required]
     public string SKU { get; set; } = string.Empty;
     
     [Required]
@@ -37,9 +36,14 @@ public class Product
     public decimal CurrentQuantity { get; set; }
     public decimal ReorderLevel { get; set; }
     public decimal MaximumStock { get; set; }
-    public string ShelfLocation { get; set; } = string.Empty;
     public int LeadTime { get; set; } // in days
     public string ProductImage { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;
     public string Notes { get; set; } = string.Empty;
+
+    public int? ParentProductId { get; set; }
+    public Product? ParentProduct { get; set; }
+    public ICollection<Product> Variants { get; set; } = new List<Product>();
+    public string VariantValues { get; set; } = string.Empty; // e.g., "Color: Red, Size: L"
 }
+

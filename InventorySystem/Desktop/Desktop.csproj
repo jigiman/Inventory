@@ -1,10 +1,13 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <PublishSingleFile>true</PublishSingleFile>
+    <PublishSelfContained>true</PublishSelfContained>
+    <ValidateExecutableReferencesMatchSelfContained>false</ValidateExecutableReferencesMatchSelfContained>
   </PropertyGroup>
 
   <ItemGroup>
@@ -12,7 +15,25 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Backend\Backend.csproj" />
+    <ProjectReference Include="..\Backend\Backend.csproj" ExcludeAssets="ContentFiles" />
   </ItemGroup>
+
+
+
+
+  <Target Name="PackageMacApp" AfterTargets="Publish" Condition="'$(OS)' == 'Unix'">
+    <Exec Command="chmod +x package_macos.sh &amp;&amp; ./package_macos.sh" WorkingDirectory="$(ProjectDir)" />
+  </Target>
+
+  <Target Name="CleanPublishOutput" AfterTargets="Publish">
+    <ItemGroup>
+      <FilesToDelete Include="$(PublishDir)aspnetcorev2_inprocess.dll" />
+      <FilesToDelete Include="$(PublishDir)Desktop.pdb" />
+      <FilesToDelete Include="$(PublishDir)Backend.pdb" />
+    </ItemGroup>
+    <Delete Files="@(FilesToDelete)" />
+    <RemoveDir Directories="$(PublishDir)LatoFont" />
+    <RemoveDir Directories="$(PublishDir)wwwroot" />
+  </Target>
 
 </Project>
