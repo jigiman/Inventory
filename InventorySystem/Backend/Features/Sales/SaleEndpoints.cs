@@ -84,35 +84,65 @@ public static class SaleEndpoints
             sale.SaleDate = DateTime.UtcNow;
             sale.Status = "Completed";
 
+            decimal itemsSubTotal = 0;
             var resolvedItems = new List<SaleItem>();
 
             foreach (var item in sale.Items)
             {
                 var allocations = await invService.DepleteStockFifoAsync(item.ProductId, item.Quantity, item.SupplierId > 0 ? item.SupplierId : null);
-                foreach (var allocation in allocations)
+                if (allocations.Count > 0)
+                {
+                    // Proportionately divide item discounts across allocated batches if depletion returns multiple batches
+                    decimal totalAllocatedQty = allocations.Sum(a => a.Quantity);
+                    for (int i = 0; i < allocations.Count; i++)
+                    {
+                        var allocation = allocations[i];
+                        decimal ratio = totalAllocatedQty > 0 ? allocation.Quantity / totalAllocatedQty : 1;
+                        decimal batchDiscountAmount = Math.Round(item.DiscountAmount * ratio, 2);
+
+                        resolvedItems.Add(new SaleItem
+                        {
+                            ProductId = item.ProductId,
+                            Quantity = allocation.Quantity,
+                            UnitPrice = item.UnitPrice,
+                            DiscountAmount = batchDiscountAmount,
+                            DiscountPercentage = item.DiscountPercentage,
+                            SupplierId = allocation.SupplierId,
+                            CostPrice = allocation.CostPrice
+                        });
+
+                        // Record stock transaction (Outgoing)
+                        await invService.RecordTransactionAsync(
+                            item.ProductId,
+                            "Sale",
+                            0,
+                            allocation.Quantity,
+                            $"Sale Ref: {sale.SaleNumber}",
+                            allocation.SupplierId,
+                            allocation.CostPrice
+                        );
+                    }
+                }
+                else
                 {
                     resolvedItems.Add(new SaleItem
                     {
                         ProductId = item.ProductId,
-                        Quantity = allocation.Quantity,
+                        Quantity = item.Quantity,
                         UnitPrice = item.UnitPrice,
-                        SupplierId = allocation.SupplierId,
-                        CostPrice = allocation.CostPrice
+                        DiscountAmount = item.DiscountAmount,
+                        DiscountPercentage = item.DiscountPercentage,
+                        SupplierId = item.SupplierId > 0 ? item.SupplierId : null
                     });
-
-                    // Record stock transaction (Outgoing)
-                    await invService.RecordTransactionAsync(
-                        item.ProductId,
-                        "Sale",
-                        0,
-                        allocation.Quantity,
-                        $"Sale Ref: {sale.SaleNumber}",
-                        allocation.SupplierId,
-                        allocation.CostPrice
-                    );
                 }
+
+                decimal itemGross = item.Quantity * item.UnitPrice;
+                decimal itemNet = Math.Max(0, itemGross - item.DiscountAmount);
+                itemsSubTotal += itemNet;
             }
 
+            sale.SubTotal = itemsSubTotal;
+            sale.TotalAmount = Math.Max(0, itemsSubTotal - sale.DiscountAmount);
             sale.Items = resolvedItems;
             db.Sales.Add(sale);
 

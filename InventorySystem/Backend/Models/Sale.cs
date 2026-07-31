@@ -21,6 +21,12 @@ public class Sale
     public string Status { get; set; } = "Completed"; // Completed, Cancelled
 
     [Column(TypeName = "decimal(18,2)")]
+    public decimal SubTotal { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal DiscountAmount { get; set; } = 0;
+
+    [Column(TypeName = "decimal(18,2)")]
     public decimal TotalAmount { get; set; }
 
     public string Notes { get; set; } = string.Empty;

@@ -20,6 +20,12 @@ public class SaleItem
     [Column(TypeName = "decimal(18,2)")]
     public decimal UnitPrice { get; set; }
 
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal DiscountAmount { get; set; } = 0;
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal DiscountPercentage { get; set; } = 0;
+
     public int? SupplierId { get; set; }
     public Supplier? Supplier { get; set; }
 
