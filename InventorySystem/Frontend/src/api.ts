@@ -194,6 +194,8 @@ export interface SaleItem {
   product?: Product;
   quantity: number;
   unitPrice: number;
+  discountAmount?: number;
+  discountPercentage?: number;
   supplierId?: number;
   supplier?: Supplier;
   costPrice?: number;
@@ -206,6 +208,8 @@ export interface Sale {
   customer?: Customer;
   saleDate?: string;
   status?: string;
+  subTotal?: number;
+  discountAmount?: number;
   totalAmount: number;
   items: SaleItem[];
 }
