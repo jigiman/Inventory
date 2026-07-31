@@ -10,6 +10,7 @@ APP_NAME="InventorySystem"
 APP_DIR="bin/Release/net10.0/osx-x64/${APP_NAME}.app"
 CONTENTS_DIR="${APP_DIR}/Contents"
 MACOS_DIR="${CONTENTS_DIR}/MacOS"
+RESOURCES_DIR="${CONTENTS_DIR}/Resources"
 
 echo "Packaging macOS App Bundle: ${APP_DIR}"
 
@@ -20,9 +21,15 @@ rm -rf "${PUBLISH_DIR}/InventorySystem.app"
 
 # Create bundle directory structure
 mkdir -p "${MACOS_DIR}"
+mkdir -p "${RESOURCES_DIR}"
 
 # Copy all files into MacOS directory
 cp -R "${PUBLISH_DIR}/" "${MACOS_DIR}/"
+
+# Copy icon
+if [ -f "AppIcon.icns" ]; then
+    cp "AppIcon.icns" "${RESOURCES_DIR}/AppIcon.icns"
+fi
 
 # Write Info.plist
 cat <<EOF > "${CONTENTS_DIR}/Info.plist"
@@ -42,6 +49,8 @@ cat <<EOF > "${CONTENTS_DIR}/Info.plist"
     <string>1.0</string>
     <key>LSMinimumSystemVersion</key>
     <string>10.15</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon.icns</string>
 </dict>
 </plist>
 EOF
