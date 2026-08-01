@@ -171,6 +171,7 @@ public class Program
         });
 
         // ── Core services ─────────────────────────────────────────────────────
+        builder.Services.AddSingleton<UpdateService>();
         builder.Services.AddScoped<CloudSyncService>();
         builder.Services.AddScoped<DbIntegrityService>();
         builder.Services.AddScoped<InventoryService>();
@@ -212,9 +213,10 @@ public class Program
         {
             var path = context.Request.Path.Value ?? "";
             bool isLauncherPath = path.StartsWith("/api/launcher", StringComparison.OrdinalIgnoreCase);
+            bool isUpdaterPath = path.StartsWith("/api/updater", StringComparison.OrdinalIgnoreCase);
             bool isApiPath = path.StartsWith("/api/", StringComparison.OrdinalIgnoreCase);
 
-            if (isApiPath && !isLauncherPath)
+            if (isApiPath && !isLauncherPath && !isUpdaterPath)
             {
                 var state = context.RequestServices.GetRequiredService<DatabaseState>();
                 if (!state.IsInitialized)
@@ -260,6 +262,7 @@ public class Program
         // Register all endpoints
         app.MapLauncherEndpoints();
         app.MapInventoryEndpoints();
+        app.MapUpdateEndpoints();
 
         await app.StartAsync();
 

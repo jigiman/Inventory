@@ -3,6 +3,7 @@ using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Photino.NET;
+using Velopack;
 
 namespace Desktop;
 
@@ -11,6 +12,9 @@ class Program
     [STAThread]
     static void Main(string[] args)
     {
+        // Velopack startup logic (installer / update hooks)
+        VelopackApp.Build().Run();
+
         // Start ASP.NET Core Backend in background thread
         var backendPort = 0; // 0 lets OS select free port
         var backendTask = Backend.Program.StartAsync(args, backendPort);

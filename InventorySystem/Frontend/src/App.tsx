@@ -24,6 +24,7 @@ import Inventory from './pages/Inventory';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import Launcher from './pages/Launcher';
+import UpdateBanner from './components/UpdateBanner';
 import { api, setSessionToken } from './api';
 import { getTheme, setTheme } from './utils/theme';
 import type { Theme } from './utils/theme';
@@ -210,6 +211,7 @@ export default function App() {
 
       {/* Main Content Pane */}
       <main className={`flex-1 ${isSidebarCollapsed ? 'pl-20' : 'pl-64'} pt-16 transition-all duration-300`}>
+        <UpdateBanner />
         {updateInfo?.updateAvailable && !hideUpdateBanner && (
           <div className="mx-auto max-w-7xl px-8 pt-6 -mb-2">
             <div className="flex items-center justify-between gap-4 rounded-2xl border border-indigo-500/20 bg-indigo-50/40 p-4 dark:bg-indigo-950/20 shadow-sm animate-in fade-in slide-in-from-top-2">
