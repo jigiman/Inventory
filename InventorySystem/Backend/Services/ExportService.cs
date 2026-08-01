@@ -110,4 +110,97 @@ public class ExportService
         document.GeneratePdf(stream);
         return stream.ToArray();
     }
+
+    public byte[] ExportSaleInvoicePdf(Backend.Models.Sale sale, string storeName = "Inventory Store")
+    {
+        var document = Document.Create(container =>
+        {
+            container.Page(page =>
+            {
+                page.Size(PageSizes.A4);
+                page.Margin(1.5f, Unit.Centimetre);
+                page.PageColor(Colors.White);
+                page.DefaultTextStyle(x => x.FontSize(10).FontColor(Colors.Black));
+
+                page.Content().Column(col =>
+                {
+                    // Table items
+                    col.Item().Table(table =>
+                    {
+                        table.ColumnsDefinition(columns =>
+                        {
+                            columns.RelativeColumn(3); // Product
+                            columns.RelativeColumn(1); // Quantity
+                            columns.RelativeColumn(1.5f); // Unit Price
+                            columns.RelativeColumn(1.5f); // Discount
+                            columns.RelativeColumn(1.5f); // Total
+                        });
+
+                        table.Header(header =>
+                        {
+                            header.Cell().BorderBottom(1).BorderColor(Colors.Black).Padding(6).Text("Product").Bold().FontSize(9);
+                            header.Cell().BorderBottom(1).BorderColor(Colors.Black).Padding(6).AlignRight().Text("Qty").Bold().FontSize(9);
+                            header.Cell().BorderBottom(1).BorderColor(Colors.Black).Padding(6).AlignRight().Text("Unit Price").Bold().FontSize(9);
+                            header.Cell().BorderBottom(1).BorderColor(Colors.Black).Padding(6).AlignRight().Text("Discount").Bold().FontSize(9);
+                            header.Cell().BorderBottom(1).BorderColor(Colors.Black).Padding(6).AlignRight().Text("Total").Bold().FontSize(9);
+                        });
+
+                        if (sale.Items != null)
+                        {
+                            foreach (var item in sale.Items)
+                            {
+                                decimal gross = item.Quantity * item.UnitPrice;
+                                decimal lineNet = Math.Max(0, gross - item.DiscountAmount);
+
+                                table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(6).Column(prodCell =>
+                                {
+                                    prodCell.Item().Text(item.Product?.Name ?? $"Product #{item.ProductId}").Bold();
+                                    if (!string.IsNullOrWhiteSpace(item.Product?.SKU))
+                                        prodCell.Item().Text($"SKU: {item.Product.SKU}").FontSize(8);
+                                });
+
+                                table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(6).AlignRight().Text(item.Quantity.ToString("0.##")).Bold();
+                                table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(6).AlignRight().Text($"NPR {item.UnitPrice:N2}");
+                                table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(6).AlignRight().Text(item.DiscountAmount > 0 ? $"- NPR {item.DiscountAmount:N2}" : "-");
+                                table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(6).AlignRight().Text($"NPR {lineNet:N2}").Bold();
+                            }
+                        }
+                    });
+
+                    col.Item().PaddingTop(15).AlignRight().Width(220).Column(summaryCol =>
+                    {
+                        if (sale.SubTotal > 0)
+                        {
+                            summaryCol.Item().Row(r =>
+                            {
+                                r.RelativeItem().Text("Subtotal:").FontSize(9);
+                                r.RelativeItem().AlignRight().Text($"NPR {sale.SubTotal:N2}").FontSize(9);
+                            });
+                        }
+
+                        if (sale.DiscountAmount > 0)
+                        {
+                            summaryCol.Item().Row(r =>
+                            {
+                                r.RelativeItem().Text("Bill Discount:").FontSize(9);
+                                r.RelativeItem().AlignRight().Text($"- NPR {sale.DiscountAmount:N2}").FontSize(9);
+                            });
+                        }
+
+                        summaryCol.Item().PaddingVertical(4).LineHorizontal(1).LineColor(Colors.Black);
+
+                        summaryCol.Item().Row(r =>
+                        {
+                            r.RelativeItem().Text("Total Amount:").Bold().FontSize(12);
+                            r.RelativeItem().AlignRight().Text($"NPR {sale.TotalAmount:N2}").Bold().FontSize(12);
+                        });
+                    });
+                });
+            });
+        });
+
+        using var stream = new MemoryStream();
+        document.GeneratePdf(stream);
+        return stream.ToArray();
+    }
 }
