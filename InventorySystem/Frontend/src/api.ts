@@ -532,4 +532,22 @@ export const api = {
 
   // Export URLs helper
   getExportUrl: (type: string, format: string) => `${API_BASE}/api/reports/export?type=${type}&format=${format}&token=${encodeURIComponent(sessionToken)}`,
+
+  // Updater
+  getUpdateStatus: () => request<UpdateStatus>('/api/updater/status'),
+  checkForUpdates: () => request<UpdateStatus>('/api/updater/check', { method: 'POST' }),
+  downloadUpdate: () => request<UpdateStatus>('/api/updater/download', { method: 'POST' }),
+  applyUpdate: () => request<{ message: string }>('/api/updater/apply', { method: 'POST' }),
 };
+
+export interface UpdateStatus {
+  isSupported: boolean;
+  currentVersion: string;
+  updateAvailable: boolean;
+  targetVersion?: string;
+  releaseNotes?: string;
+  isDownloaded: boolean;
+  downloadProgress: number;
+  error?: string;
+}
+
