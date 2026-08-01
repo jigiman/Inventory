@@ -429,6 +429,8 @@ export const api = {
     return request<PaginatedResult<Sale>>(url);
   },
   createSale: (sale: Sale) => request<Sale>('/api/sales', { method: 'POST', body: JSON.stringify(sale) }),
+  getSale: (id: number) => request<Sale>(`/api/sales/${id}`),
+  getSalePdfUrl: (id: number) => `${API_BASE}/api/sales/${id}/pdf?token=${encodeURIComponent(sessionToken)}`,
 
   // Returns
   getSalesReturns: (params?: { customerId?: number; saleId?: number }) => {

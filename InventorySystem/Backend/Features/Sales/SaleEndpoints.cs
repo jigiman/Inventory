@@ -73,6 +73,41 @@ public static class SaleEndpoints
             return Results.Ok(new { totalCount, items, page, pageSize });
         });
 
+        app.MapGet("/api/sales/{id:int}", async (AppDbContext db, int id) =>
+        {
+            var sale = await db.Sales
+                .Include(s => s.Customer)
+                .Include(s => s.Items)
+                    .ThenInclude(si => si.Product)
+                .Include(s => s.Items)
+                    .ThenInclude(si => si.Supplier)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.Id == id);
+
+            if (sale == null) return Results.NotFound("Sale not found");
+            return Results.Ok(sale);
+        });
+
+        app.MapGet("/api/sales/{id:int}/pdf", async (AppDbContext db, ExportService es, int id) =>
+        {
+            var sale = await db.Sales
+                .Include(s => s.Customer)
+                .Include(s => s.Items)
+                    .ThenInclude(si => si.Product)
+                .Include(s => s.Items)
+                    .ThenInclude(si => si.Supplier)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.Id == id);
+
+            if (sale == null) return Results.NotFound("Sale not found");
+
+            var storeNameSetting = await db.Settings.FirstOrDefaultAsync(s => s.Key == "StoreName");
+            string storeName = storeNameSetting?.Value ?? "Inventory Store";
+
+            var pdfBytes = es.ExportSaleInvoicePdf(sale, storeName);
+            return Results.File(pdfBytes, "application/pdf", $"Invoice_{sale.SaleNumber}.pdf");
+        });
+
         app.MapPost("/api/sales", async (AppDbContext db, InventoryService invService, Sale sale) =>
         {
             if (sale.CustomerId <= 0)
