@@ -1,0 +1,76 @@
+name: Windows Release Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release Version (e.g. 1.1.0)'
+        required: true
+        default: '1.1.0'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build Frontend
+        run: |
+          cd InventorySystem/Frontend
+          npm ci
+          npm run build
+
+      - name: Install Velopack CLI
+        run: dotnet tool install -g vpk
+
+      - name: Determine Version
+        id: get_version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building Windows release version: $VERSION"
+
+      - name: Publish .NET Desktop App (Windows)
+        run: |
+          dotnet publish InventorySystem/Desktop/Desktop.csproj -c Release -r win-x64 --self-contained
+
+      - name: Package with Velopack
+        shell: bash
+        run: |
+          vpk pack \
+            -u InventorySystem \
+            -v "${{ steps.get_version.outputs.VERSION }}" \
+            -p "InventorySystem/Desktop/bin/Release/net10.0/win-x64/publish" \
+            -e "Desktop.exe" \
+            -r "win-x64" \
+            -c "win"
+
+      - name: Upload Windows Release to GitHub Releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          vpk upload github \
+            --repoUrl "https://github.com/jigiman/inventory" \
+            --token "$GH_TOKEN" \
+            --tag "v${{ steps.get_version.outputs.VERSION }}"

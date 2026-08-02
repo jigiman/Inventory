@@ -4,6 +4,21 @@ This guide explains how to release updates for the Single-Store Inventory System
 
 ---
 
+## Automated Release via GitHub Actions (Recommended)
+
+Releases are built automatically using GitHub Actions when you push a Git tag:
+
+```bash
+git add .
+git commit -m "Release v1.1.0"
+git tag v1.1.0
+git push origin v1.1.0
+```
+
+The workflow file [.github/workflows/release-windows.yml](file:///Users/jigiman/Repositories/Inventory/.github/workflows/release-windows.yml) automatically builds the Windows `.exe` setup package and publishes it directly to GitHub Releases.
+
+---
+
 ## 1. Configure the Release Source URL
 
 The application reads the update source from `InventorySystem/Backend/appsettings.json`. Update `Velopack:GithubUrl` (or `Velopack:UpdateUrl`) with your repository URL:
