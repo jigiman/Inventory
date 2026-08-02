@@ -35,7 +35,11 @@ public class UpdateService
     {
         var mgr = CreateUpdateManager();
         var isSupported = mgr != null;
-        var currentVer = mgr?.CurrentVersion?.ToString() ?? "1.0.0";
+
+        var entryAssy = System.Reflection.Assembly.GetEntryAssembly() ?? typeof(UpdateService).Assembly;
+        var assyVer = entryAssy.GetName().Version;
+        var currentVer = mgr?.CurrentVersion?.ToString() 
+            ?? (assyVer != null && assyVer.ToString() != "0.0.0.0" ? assyVer.ToString(3) : "1.0.0");
 
         return new UpdateStatus
         {

@@ -52,7 +52,7 @@ jobs:
 
       - name: Publish .NET Desktop App (Windows)
         run: |
-          dotnet publish InventorySystem/Desktop/Desktop.csproj -c Release -r win-x64 --self-contained
+          dotnet publish InventorySystem/Desktop/Desktop.csproj -c Release -r win-x64 --self-contained -p:Version=${{ steps.get_version.outputs.VERSION }}
 
       - name: Package with Velopack
         shell: bash

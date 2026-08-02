@@ -258,7 +258,7 @@ export default function Settings() {
         </div>
 
         {/* Software Updates Section */}
-        <div className="rounded-2xl border border-slate-200/50 bg-white/70 p-6 backdrop-blur-xl dark:border-slate-800/40 dark:bg-slate-950/40 shadow-sm">
+        <div className="rounded-2xl border border-slate-200/50 bg-white/70 p-6 backdrop-blur-xl dark:border-slate-800/40 dark:bg-slate-950/40 shadow-sm mb-8">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
