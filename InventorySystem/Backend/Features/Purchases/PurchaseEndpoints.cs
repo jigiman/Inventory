@@ -200,7 +200,7 @@ public static class PurchaseEndpoints
             var payments = await db.Payments
                 .Where(p => p.SupplierId != null)
                 .GroupBy(p => p.SupplierId)
-                .Select(g => new { SupplierId = g.Key.Value, TotalPaid = g.Sum(p => p.IsRefund ? -p.Amount : p.Amount) })
+                .Select(g => new { SupplierId = g.Key!.Value, TotalPaid = g.Sum(p => p.IsRefund ? -p.Amount : p.Amount) })
                 .ToListAsync();
 
             var suppliersQuery = db.Suppliers.AsNoTracking().AsQueryable();

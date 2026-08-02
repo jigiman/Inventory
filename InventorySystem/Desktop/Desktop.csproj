@@ -9,6 +9,7 @@
     <PublishSingleFile>true</PublishSingleFile>
     <PublishSelfContained>true</PublishSelfContained>
     <ValidateExecutableReferencesMatchSelfContained>false</ValidateExecutableReferencesMatchSelfContained>
+    <NoWarn>$(NoWarn);NU1903</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

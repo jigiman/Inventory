@@ -60,6 +60,8 @@ public class UpdateService
             };
         }
 
+        var status = GetStatus();
+
         try
         {
             Log.Information("Checking for updates via Velopack...");
