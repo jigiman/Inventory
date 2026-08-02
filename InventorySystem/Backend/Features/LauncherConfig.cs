@@ -34,11 +34,68 @@ public class LauncherConfig
         PropertyNameCaseInsensitive = true,
     };
 
-    public static string ConfigFilePath { get; } = System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "InventorySystem",
-        "launcher.json"
-    );
+    public static string ConfigFilePath { get; } = GetConfigFilePath();
+
+    private static string GetConfigFilePath()
+    {
+        var primaryPath = System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "InventorySystem",
+            "launcher.json"
+        );
+
+        if (File.Exists(primaryPath))
+            return primaryPath;
+
+        // Candidate fallback paths to check (e.g. previous version folders or working dirs)
+        var candidatePaths = new List<string>
+        {
+            Path.Combine(AppContext.BaseDirectory, "launcher.json"),
+            Path.Combine(Directory.GetCurrentDirectory(), "launcher.json"),
+            Path.Combine(AppContext.BaseDirectory, "..", "launcher.json"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "InventorySystem", "current", "launcher.json")
+        };
+
+        // Scan sibling app-* directories under %LocalAppData%\InventorySystem (Velopack update folders)
+        try
+        {
+            var appDataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "InventorySystem");
+            if (Directory.Exists(appDataDir))
+            {
+                var siblingDirs = Directory.GetDirectories(appDataDir, "app-*")
+                    .OrderByDescending(Directory.GetLastWriteTimeUtc);
+                foreach (var dir in siblingDirs)
+                {
+                    candidatePaths.Add(Path.Combine(dir, "launcher.json"));
+                }
+            }
+        }
+        catch
+        {
+            // Ignore directory enumeration errors
+        }
+
+        foreach (var candidate in candidatePaths)
+        {
+            if (File.Exists(candidate))
+            {
+                try
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(primaryPath)!);
+                    File.Copy(candidate, primaryPath, overwrite: true);
+                    Serilog.Log.Information("Migrated launcher.json from {Candidate} to {PrimaryPath}", candidate, primaryPath);
+                    return primaryPath;
+                }
+                catch (Exception ex)
+                {
+                    Serilog.Log.Warning(ex, "Failed to copy launcher.json from {Candidate}", candidate);
+                    return candidate;
+                }
+            }
+        }
+
+        return primaryPath;
+    }
 
     public static LauncherConfig Load()
     {
