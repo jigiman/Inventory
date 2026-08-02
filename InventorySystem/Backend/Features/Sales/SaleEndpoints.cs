@@ -271,7 +271,7 @@ public static class SaleEndpoints
             var payments = await db.Payments
                 .Where(p => p.CustomerId != null)
                 .GroupBy(p => p.CustomerId)
-                .Select(g => new { CustomerId = g.Key.Value, TotalPaid = g.Sum(p => p.IsRefund ? -p.Amount : p.Amount) })
+                .Select(g => new { CustomerId = g.Key!.Value, TotalPaid = g.Sum(p => p.IsRefund ? -p.Amount : p.Amount) })
                 .ToListAsync();
 
             var customersQuery = db.Customers.AsNoTracking().AsQueryable();

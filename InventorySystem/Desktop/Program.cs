@@ -105,7 +105,8 @@ class Program
 
         window.RegisterWebMessageReceivedHandler(async (sender, message) =>
             {
-                var win = (PhotinoWindow)sender;
+                var win = sender as PhotinoWindow;
+                if (win is null) return;
 
                 // Parse the incoming JSON message from the frontend
                 FilePickMessage? msg = null;

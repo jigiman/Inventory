@@ -6,6 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <OutputType>Exe</OutputType>
     <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
+    <NoWarn>$(NoWarn);NU1903</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

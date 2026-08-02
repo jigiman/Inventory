@@ -462,7 +462,7 @@ public static class ReportEndpoints
                 var payments = await db.Payments
                     .Where(p => p.CustomerId != null)
                     .GroupBy(p => p.CustomerId)
-                    .Select(g => new { CustomerId = g.Key.Value, TotalPaid = g.Sum(p => p.IsRefund ? -p.Amount : p.Amount) })
+                    .Select(g => new { CustomerId = g.Key!.Value, TotalPaid = g.Sum(p => p.IsRefund ? -p.Amount : p.Amount) })
                     .ToListAsync();
                 var customers = await db.Customers.ToListAsync();
                 var list = customers.Select(c => {
@@ -501,7 +501,7 @@ public static class ReportEndpoints
                 var payments = await db.Payments
                     .Where(p => p.SupplierId != null)
                     .GroupBy(p => p.SupplierId)
-                    .Select(g => new { SupplierId = g.Key.Value, TotalPaid = g.Sum(p => p.IsRefund ? -p.Amount : p.Amount) })
+                    .Select(g => new { SupplierId = g.Key!.Value, TotalPaid = g.Sum(p => p.IsRefund ? -p.Amount : p.Amount) })
                     .ToListAsync();
                 var suppliers = await db.Suppliers.ToListAsync();
                 var list = suppliers.Select(s => {

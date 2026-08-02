@@ -81,19 +81,19 @@ export default function UpdateBanner() {
           <button
             onClick={handleApply}
             disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-1 bg-white text-indigo-700 font-semibold rounded-md hover:bg-indigo-50 transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white !text-indigo-950 font-bold rounded-lg hover:bg-indigo-50 transition-colors shadow-xs disabled:opacity-50 cursor-pointer border border-indigo-200"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            <span>{loading ? 'Restarting...' : 'Restart & Apply'}</span>
+            <RefreshCw className={`w-4 h-4 text-indigo-950 ${loading ? 'animate-spin' : ''}`} />
+            <span className="!text-indigo-950 font-bold">{loading ? 'Restarting...' : 'Restart & Apply'}</span>
           </button>
         ) : (
           <button
             onClick={handleDownload}
             disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-1 bg-white text-indigo-700 font-semibold rounded-md hover:bg-indigo-50 transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white !text-indigo-950 font-bold rounded-lg hover:bg-indigo-50 transition-colors shadow-xs disabled:opacity-50 cursor-pointer border border-indigo-200"
           >
-            <Download className={`w-4 h-4 ${loading ? 'animate-bounce' : ''}`} />
-            <span>
+            <Download className={`w-4 h-4 text-indigo-950 ${loading ? 'animate-bounce' : ''}`} />
+            <span className="!text-indigo-950 font-bold">
               {loading
                 ? `Downloading (${status.downloadProgress}%)...`
                 : 'Download Update'}
