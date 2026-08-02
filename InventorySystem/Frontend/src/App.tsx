@@ -33,7 +33,23 @@ export default function App() {
   const [activePage, setActivePage] = useState('dashboard');
   const [darkMode, setDarkMode] = useState<Theme>(() => getTheme());
   const [storeName, setStoreName] = useState('Single Store Inventory');
+  const [appVersion, setAppVersion] = useState<string | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
+  // Fetch application version
+  useEffect(() => {
+    async function loadVersion() {
+      try {
+        const res = await api.getUpdateStatus();
+        if (res?.currentVersion) {
+          setAppVersion(res.currentVersion);
+        }
+      } catch {
+        // Ignore fallback
+      }
+    }
+    loadVersion();
+  }, []);
 
   const [updateInfo, setUpdateInfo] = useState<{
     updateAvailable: boolean;
@@ -175,6 +191,11 @@ export default function App() {
             <span className="text-xl font-extrabold tracking-tight bg-gradient-to-r from-indigo-650 to-violet-600 bg-clip-text text-transparent dark:from-indigo-400 dark:to-violet-400">
               {storeName}
             </span>
+            {appVersion && (
+              <span className="rounded-full bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 text-xs font-bold text-indigo-700 dark:bg-indigo-950/60 dark:border-indigo-800/60 dark:text-indigo-300 font-mono shadow-2xs">
+                v{appVersion}
+              </span>
+            )}
           </div>
         </div>
 

@@ -34,7 +34,7 @@ public class UpdateService
     public UpdateStatus GetStatus()
     {
         var mgr = CreateUpdateManager();
-        var isSupported = mgr?.IsInstalled ?? false;
+        var isSupported = mgr != null;
         var currentVer = mgr?.CurrentVersion?.ToString() ?? "1.0.0";
 
         return new UpdateStatus
@@ -50,18 +50,14 @@ public class UpdateService
 
     public async Task<UpdateStatus> CheckForUpdatesAsync()
     {
-        var status = GetStatus();
-        if (!status.IsSupported)
-        {
-            status.Error = "App is not running from an installed Velopack package.";
-            return status;
-        }
-
         var mgr = CreateUpdateManager();
         if (mgr == null)
         {
-            status.Error = "Failed to initialize update manager.";
-            return status;
+            return new UpdateStatus
+            {
+                IsSupported = false,
+                Error = "Failed to initialize update manager."
+            };
         }
 
         try

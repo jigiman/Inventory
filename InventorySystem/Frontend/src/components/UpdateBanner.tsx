@@ -12,7 +12,7 @@ export default function UpdateBanner() {
     let active = true;
     async function check() {
       try {
-        const res = await api.getUpdateStatus();
+        const res = await api.checkForUpdates();
         if (active) {
           setStatus(res);
         }
