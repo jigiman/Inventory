@@ -85,6 +85,27 @@ This outputs release packages into a local `Releases/` directory.
 
 ---
 
+### Step C: Code Signing (Prevent Windows Smart App Control Blocks)
+
+Windows Smart App Control (SAC) blocks unsigned `.exe` applications. Velopack supports automatic signing of the setup installer and embedded app binaries using `vpk pack --signParams`.
+
+#### Local Signing Command:
+```bash
+vpk pack -u InventorySystem -v 1.0.0 -p InventorySystem/Desktop/bin/Release/net10.0/win-x64/publish -e Desktop.exe --signParams "/f mycert.pfx /p CERT_PASSWORD /tr http://timestamp.digicert.com /td sha256"
+```
+
+#### GitHub Actions Automated Signing Setup:
+1. Export your Code Signing Certificate (`.pfx` file) as a Base64 string:
+   * **PowerShell**: `[Convert]::ToBase64String([IO.File]::ReadAllBytes("mycert.pfx")) | Set-Clipboard`
+   * **macOS / Linux**: `base64 -i mycert.pfx`
+2. Go to your GitHub repository **Settings** → **Secrets and variables** → **Actions**.
+3. Add the following secrets:
+   * `CODE_SIGNING_CERT_BASE64`: Paste the base64-encoded string of your `.pfx` certificate.
+   * `CODE_SIGNING_CERT_PASSWORD`: Enter the password for your `.pfx` certificate.
+4. The workflow in `.github/workflows/release-windows.yml` will automatically detect the secrets, sign the binaries during `vpk pack`, and securely clean up the `.pfx` file after building.
+
+---
+
 ## 4. Publish Release to GitHub
 
 Upload the contents of the generated `Releases/` folder to GitHub Releases:

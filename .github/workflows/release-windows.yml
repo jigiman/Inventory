@@ -54,16 +54,54 @@ jobs:
         run: |
           dotnet publish InventorySystem/Desktop/Desktop.csproj -c Release -r win-x64 --self-contained -p:Version=${{ steps.get_version.outputs.VERSION }}
 
-      - name: Package with Velopack
-        shell: bash
+      - name: Decode Code Signing Certificate
+        shell: powershell
         run: |
-          vpk pack \
-            -u InventorySystem \
-            -v "${{ steps.get_version.outputs.VERSION }}" \
-            -p "InventorySystem/Desktop/bin/Release/net10.0/win-x64/publish" \
-            -e "Desktop.exe" \
-            -r "win-x64" \
-            -c "win"
+          $certBase64 = "${{ secrets.CODE_SIGNING_CERT_BASE64 }}"
+          if (-not [string]::IsNullOrEmpty($certBase64)) {
+            $certBytes = [System.Convert]::FromBase64String($certBase64)
+            [System.IO.File]::WriteAllBytes("code_signing_cert.pfx", $certBytes)
+            Write-Host "Code signing certificate successfully prepared."
+          } else {
+            Write-Host "No CODE_SIGNING_CERT_BASE64 secret provided. Packaging without code signing."
+          }
+
+      - name: Package with Velopack
+        shell: powershell
+        run: |
+          $version = "${{ steps.get_version.outputs.VERSION }}"
+          $certPass = "${{ secrets.CODE_SIGNING_CERT_PASSWORD }}"
+          $hasCert = Test-Path "code_signing_cert.pfx"
+
+          if ($hasCert -and -not [string]::IsNullOrEmpty($certPass)) {
+            Write-Host "Packaging signed release v$version..."
+            vpk pack `
+              -u InventorySystem `
+              -v "$version" `
+              -p "InventorySystem/Desktop/bin/Release/net10.0/win-x64/publish" `
+              -e "Desktop.exe" `
+              -r "win-x64" `
+              -c "win" `
+              --signParams "/f code_signing_cert.pfx /p $certPass /tr http://timestamp.digicert.com /td sha256"
+          } else {
+            Write-Host "Packaging unsigned release v$version..."
+            vpk pack `
+              -u InventorySystem `
+              -v "$version" `
+              -p "InventorySystem/Desktop/bin/Release/net10.0/win-x64/publish" `
+              -e "Desktop.exe" `
+              -r "win-x64" `
+              -c "win"
+          }
+
+      - name: Clean up Certificate
+        if: always()
+        shell: powershell
+        run: |
+          if (Test-Path "code_signing_cert.pfx") {
+            Remove-Item -Force "code_signing_cert.pfx"
+            Write-Host "Cleaned up temporary code signing certificate file."
+          }
 
       - name: Upload Windows Release to GitHub Releases
         shell: bash
@@ -74,3 +112,4 @@ jobs:
             --repoUrl "https://github.com/jigiman/inventory" \
             --token "$GH_TOKEN" \
             --tag "v${{ steps.get_version.outputs.VERSION }}"
+
