@@ -122,6 +122,37 @@ public class ExportService
                 page.PageColor(Colors.White);
                 page.DefaultTextStyle(x => x.FontSize(10).FontColor(Colors.Black));
 
+                page.Header().Column(headerCol =>
+                {
+                    headerCol.Item().Row(row =>
+                    {
+                        row.RelativeItem().Column(c =>
+                        {
+                            c.Item().Text(storeName).Bold().FontSize(16).FontColor(Colors.Indigo.Darken2);
+                            c.Item().Text("TAX / SALES INVOICE").FontSize(9.5f).Bold().FontColor(Colors.Grey.Darken1);
+                        });
+
+                        row.RelativeItem().AlignRight().Column(c =>
+                        {
+                            c.Item().Text($"Invoice #: {sale.SaleNumber}").Bold().FontSize(10.5f);
+                            c.Item().Text($"Date: {sale.SaleDate:yyyy-MM-dd HH:mm}").FontSize(9).FontColor(Colors.Grey.Darken2);
+                        });
+                    });
+
+                    headerCol.Item().PaddingVertical(8).LineHorizontal(1).LineColor(Colors.Grey.Lighten2);
+
+                    // Customer Details Section (Name & Phone ONLY)
+                    headerCol.Item().PaddingBottom(12).Column(c =>
+                    {
+                        c.Item().Text("Customer Details:").Bold().FontSize(9).FontColor(Colors.Grey.Darken2);
+                        c.Item().Text(sale.Customer?.Name ?? "Walk-in Customer").Bold().FontSize(10.5f);
+                        if (!string.IsNullOrWhiteSpace(sale.Customer?.Phone))
+                        {
+                            c.Item().Text($"Phone: {sale.Customer.Phone}").FontSize(9.5f).FontColor(Colors.Grey.Darken3);
+                        }
+                    });
+                });
+
                 page.Content().Column(col =>
                 {
                     // Table items

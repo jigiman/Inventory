@@ -23,15 +23,16 @@ class Program
         var (app, address) = backendTask.GetAwaiter().GetResult();
 
         // If environment variable is set to Development, point to Vite dev server (if running)
-        var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+        var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Development";
+        var isDev = string.Equals(env, "Development", StringComparison.OrdinalIgnoreCase);
         var frontendUrl = address;
-        if (env == "Development" && IsViteRunning())
+        if (isDev && IsViteRunning())
         {
-            frontendUrl = $"http://localhost:5173?backend={Uri.EscapeDataString(address)}&desktop=true";
+            frontendUrl = $"http://localhost:5173?backend={Uri.EscapeDataString(address)}&desktop=true&dev=true";
         }
         else
         {
-            frontendUrl = $"{address}?desktop=true";
+            frontendUrl = $"{address}?desktop=true{(isDev ? "&dev=true" : "")}";
         }
 
         var dbFilters = new (string name, string[] extensions)[]

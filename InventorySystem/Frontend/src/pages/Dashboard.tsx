@@ -16,7 +16,9 @@ interface DashboardStats {
   lowStockCount: number;
   outOfStockCount: number;
   totalDebtors: number;
+  customerCredits?: number;
   totalCreditors: number;
+  supplierCredits?: number;
   recentTransactions: {
     id: number;
     transactionDate: string;
@@ -194,6 +196,11 @@ export default function Dashboard() {
             <h3 className="text-2xl font-extrabold text-slate-900 dark:text-slate-100 mt-1">
               NPR {stats?.totalDebtors.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </h3>
+            {Boolean(stats?.customerCredits && stats.customerCredits > 0) && (
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Customer Credits: NPR {stats?.customerCredits?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+            )}
           </div>
         </div>
 
@@ -206,6 +213,11 @@ export default function Dashboard() {
             <h3 className="text-2xl font-extrabold text-slate-900 dark:text-slate-100 mt-1">
               NPR {stats?.totalCreditors.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </h3>
+            {Boolean(stats?.supplierCredits && stats.supplierCredits > 0) && (
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Supplier Credits: NPR {stats?.supplierCredits?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+            )}
           </div>
         </div>
       </div>

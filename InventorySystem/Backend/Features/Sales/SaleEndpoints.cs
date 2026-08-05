@@ -234,6 +234,11 @@ public static class SaleEndpoints
                 }
             }
 
+            if (sr.TotalAmount <= 0 && sr.Items != null && sr.Items.Count > 0)
+            {
+                sr.TotalAmount = sr.Items.Sum(i => i.Quantity * i.UnitPrice);
+            }
+
             db.SalesReturns.Add(sr);
 
             foreach (var item in sr.Items)
@@ -259,6 +264,7 @@ public static class SaleEndpoints
             decimal? minBalance = null) =>
         {
             var sales = await db.Sales
+                .Where(s => s.Status != "Cancelled")
                 .GroupBy(s => s.CustomerId)
                 .Select(g => new { CustomerId = g.Key, TotalSales = g.Sum(s => s.TotalAmount) })
                 .ToListAsync();
@@ -308,12 +314,13 @@ public static class SaleEndpoints
             return Results.Ok(new { totalCount, items, page, pageSize });
         });
 
-        app.MapGet("/api/payments", async (AppDbContext db, int? saleId, int? purchaseOrderId, int? customerId) =>
+        app.MapGet("/api/payments", async (AppDbContext db, int? saleId, int? purchaseOrderId, int? customerId, int? supplierId) =>
         {
             var query = db.Payments.AsQueryable();
             if (saleId != null) query = query.Where(p => p.SaleId == saleId);
             if (purchaseOrderId != null) query = query.Where(p => p.PurchaseOrderId == purchaseOrderId);
             if (customerId != null) query = query.Where(p => p.CustomerId == customerId);
+            if (supplierId != null) query = query.Where(p => p.SupplierId == supplierId);
             return await query.ToListAsync();
         });
 

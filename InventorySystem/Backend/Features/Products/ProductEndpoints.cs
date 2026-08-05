@@ -42,6 +42,20 @@ public static class ProductEndpoints
             return Results.Ok(new { totalCount, items, page, pageSize });
         });
 
+        app.MapGet("/api/products/{id:int}", async (AppDbContext db, int id) =>
+        {
+            var product = await db.Products
+                .Include(p => p.Category)
+                .Include(p => p.Brand)
+                .Include(p => p.Unit)
+                .Include(p => p.Supplier)
+                .Include(p => p.Variants)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Id == id);
+
+            return product != null ? Results.Ok(product) : Results.NotFound();
+        });
+
         app.MapPost("/api/products", async (AppDbContext db, InventoryService invService, Product product) =>
         {
             if (string.IsNullOrWhiteSpace(product.Name))

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { DollarSign, ArrowUpRight, ArrowDownLeft, Wallet } from 'lucide-react';
+import { DollarSign, ArrowUpRight, ArrowDownLeft, Wallet, ExternalLink } from 'lucide-react';
 import { api } from '../api';
 import type { FinanceReportItem, Payment } from '../api';
 import { Button } from '../components/ui/Button';
@@ -7,7 +7,11 @@ import { Dialog } from '../components/ui/Dialog';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 
-export default function Finance() {
+interface FinanceProps {
+  onSelectSupplier?: (supplierId: number) => void;
+}
+
+export default function Finance({ onSelectSupplier }: FinanceProps) {
   const [activeTab, setActiveTab] = useState<'debtors' | 'creditors'>('debtors');
   const [debtors, setDebtors] = useState<FinanceReportItem[]>([]);
   const [creditors, setCreditors] = useState<FinanceReportItem[]>([]);
@@ -188,10 +192,24 @@ export default function Finance() {
                     NPR {item.balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <Button variant="outline" size="sm" onClick={() => handleOpenPayment(item)} className="inline-flex items-center space-x-1.5">
-                      <Wallet size={14} />
-                      <span>Record {activeTab === 'debtors' ? 'Receipt' : 'Payment'}</span>
-                    </Button>
+                    <div className="flex items-center justify-end space-x-2">
+                      {activeTab === 'creditors' && item.supplier?.id && onSelectSupplier && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onSelectSupplier(item.supplier!.id!)}
+                          className="inline-flex items-center space-x-1.5"
+                          title="View Creditor Statement & Transactions"
+                        >
+                          <ExternalLink size={14} />
+                          <span>View Details</span>
+                        </Button>
+                      )}
+                      <Button variant="outline" size="sm" onClick={() => handleOpenPayment(item)} className="inline-flex items-center space-x-1.5">
+                        <Wallet size={14} />
+                        <span>Record {activeTab === 'debtors' ? 'Receipt' : 'Payment'}</span>
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}

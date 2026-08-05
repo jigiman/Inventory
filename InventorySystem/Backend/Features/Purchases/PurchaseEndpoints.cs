@@ -22,6 +22,7 @@ public static class PurchaseEndpoints
             int pageSize = 50,
             string? search = null,
             string? status = null,
+            int? supplierId = null,
             DateTime? startDate = null,
             DateTime? endDate = null) =>
         {
@@ -31,6 +32,11 @@ public static class PurchaseEndpoints
                     .ThenInclude(pi => pi.Product)
                 .AsNoTracking()
                 .AsQueryable();
+
+            if (supplierId != null)
+            {
+                query = query.Where(po => po.SupplierId == supplierId.Value);
+            }
 
             if (!string.IsNullOrWhiteSpace(search))
             {
@@ -63,6 +69,18 @@ public static class PurchaseEndpoints
                 .ToListAsync();
 
             return Results.Ok(new { totalCount, items, page, pageSize });
+        });
+
+        app.MapGet("/api/purchase-orders/{id:int}", async (AppDbContext db, int id) =>
+        {
+            var po = await db.PurchaseOrders
+                .Include(p => p.Supplier)
+                .Include(p => p.Items)
+                    .ThenInclude(pi => pi.Product)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Id == id);
+
+            return po != null ? Results.Ok(po) : Results.NotFound();
         });
 
         app.MapPost("/api/purchase-orders", async (AppDbContext db, PurchaseOrder po) =>
@@ -163,6 +181,11 @@ public static class PurchaseEndpoints
                 }
             }
 
+            if (pr.TotalAmount <= 0 && pr.Items != null && pr.Items.Count > 0)
+            {
+                pr.TotalAmount = pr.Items.Sum(i => i.Quantity * i.CostPrice);
+            }
+
             db.PurchaseReturns.Add(pr);
 
             foreach (var item in pr.Items)
@@ -188,6 +211,7 @@ public static class PurchaseEndpoints
             decimal? minBalance = null) =>
         {
             var purchases = await db.PurchaseOrders
+                .Where(po => po.Status != "Cancelled" && po.Status != "Draft")
                 .GroupBy(po => po.SupplierId)
                 .Select(g => new { SupplierId = g.Key, TotalPurchases = g.Sum(po => po.TotalAmount) })
                 .ToListAsync();

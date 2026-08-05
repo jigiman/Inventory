@@ -3,6 +3,7 @@ import {
    LayoutDashboard, 
    Package, 
    Building2, 
+   Truck,
    FileText, 
    Database, 
    TrendingUp, 
@@ -10,12 +11,15 @@ import {
    Menu,
    ShoppingCart,
    Wallet,
-   Users
+   Users,
+   RotateCw
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard';
 import Products from './pages/Products';
 import Masters from './pages/Masters';
+import Suppliers from './pages/Suppliers';
+import SupplierDetail from './pages/SupplierDetail';
 import Customers from './pages/Customers';
 import Purchasing from './pages/Purchasing';
 import Sales from './pages/Sales';
@@ -31,6 +35,7 @@ import type { Theme } from './utils/theme';
 
 export default function App() {
   const [activePage, setActivePage] = useState('dashboard');
+  const [selectedSupplierId, setSelectedSupplierId] = useState<number | null>(null);
   const [darkMode, setDarkMode] = useState<Theme>(() => getTheme());
   const [storeName, setStoreName] = useState('Single Store Inventory');
   const [appVersion, setAppVersion] = useState<string | null>(null);
@@ -55,6 +60,21 @@ export default function App() {
   useEffect(() => {
     setTheme(darkMode);
   }, [darkMode]);
+
+  const isDevMode = import.meta.env.DEV || window.location.search.includes('dev=true');
+
+  // Global keyboard shortcuts for refreshing UI (Development mode only)
+  useEffect(() => {
+    if (!isDevMode) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F5' || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'r')) {
+        e.preventDefault();
+        window.location.reload();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isDevMode]);
 
   // Detect desktop environment and apply scaling class
   useEffect(() => {
@@ -118,6 +138,7 @@ export default function App() {
     { id: 'dashboard', text: 'Dashboard', icon: <LayoutDashboard size={18} /> },
     { id: 'products', text: 'Products', icon: <Package size={18} /> },
     { id: 'masters', text: 'Masters', icon: <Building2 size={18} /> },
+    { id: 'suppliers', text: 'Suppliers', icon: <Truck size={18} /> },
     { id: 'customers', text: 'Customers', icon: <Users size={18} /> },
     { id: 'purchasing', text: 'Purchasing', icon: <FileText size={18} /> },
     { id: 'sales', text: 'Sales', icon: <ShoppingCart size={18} /> },
@@ -159,6 +180,15 @@ export default function App() {
               >
                 <Menu size={18} />
               </button>
+              {isDevMode && (
+                <button
+                  onClick={() => window.location.reload()}
+                  className="rounded-xl p-2.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-slate-100 transition-all duration-300 cursor-pointer shadow-sm border border-slate-200/30 dark:border-slate-800"
+                  title="Refresh UI (Dev Mode Only)"
+                >
+                  <RotateCw size={18} />
+                </button>
+              )}
               <div className="flex items-center space-x-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-500/20">
                   <Package size={20} className="animate-pulse" />
@@ -211,10 +241,31 @@ export default function App() {
               {activePage === 'dashboard' && <Dashboard />}
               {activePage === 'products' && <Products />}
               {activePage === 'masters' && <Masters />}
+              {activePage === 'suppliers' && (
+                <Suppliers
+                  onSelectSupplier={(id) => {
+                    setSelectedSupplierId(id);
+                    setActivePage('supplier-detail');
+                  }}
+                />
+              )}
+              {activePage === 'supplier-detail' && selectedSupplierId != null && (
+                <SupplierDetail
+                  supplierId={selectedSupplierId}
+                  onBack={() => setActivePage('suppliers')}
+                />
+              )}
               {activePage === 'customers' && <Customers />}
               {activePage === 'purchasing' && <Purchasing />}
               {activePage === 'sales' && <Sales />}
-              {activePage === 'finance' && <Finance />}
+              {activePage === 'finance' && (
+                <Finance
+                  onSelectSupplier={(id) => {
+                    setSelectedSupplierId(id);
+                    setActivePage('supplier-detail');
+                  }}
+                />
+              )}
               {activePage === 'inventory' && <Inventory />}
               {activePage === 'reports' && <Reports />}
               {activePage === 'settings' && <Settings />}

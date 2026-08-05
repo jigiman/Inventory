@@ -6,8 +6,11 @@ import { Button } from '../components/ui/Button';
 import { Dialog } from '../components/ui/Dialog';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
+import PurchaseOrderDetail from './PurchaseOrderDetail';
 
 export default function Purchasing() {
+  const [viewMode, setViewMode] = useState<'list' | 'detail'>('list');
+  const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -48,7 +51,6 @@ export default function Purchasing() {
   // Dialog States
   const [openCreate, setOpenCreate] = useState(false);
   const [openReceive, setOpenReceive] = useState(false);
-  const [openDetails, setOpenDetails] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<PurchaseOrder | null>(null);
 
   // New PO Form States
@@ -59,14 +61,6 @@ export default function Purchasing() {
 
   // Receive Form States
   const [receiveQuantities, setReceiveQuantities] = useState<{ [productId: number]: number }>({});
-
-  // Return States
-  const [purchaseReturns, setPurchaseReturns] = useState<any[]>([]);
-  const [loadingReturns, setLoadingReturns] = useState(false);
-  const [openReturn, setOpenReturn] = useState(false);
-  const [returnQuantities, setReturnQuantities] = useState<{ [productId: number]: number }>({});
-  const [returnNotes, setReturnNotes] = useState('');
-  const [submittingReturn, setSubmittingReturn] = useState(false);
 
   async function loadOrders() {
     setLoading(true);
@@ -119,29 +113,6 @@ export default function Purchasing() {
   useEffect(() => {
     loadOrders();
   }, [currentPage]);
-
-  async function loadReturns() {
-    if (!selectedOrder) return;
-    setLoadingReturns(true);
-    try {
-      const data = await api.getPurchaseReturns({ purchaseOrderId: selectedOrder.id });
-      setPurchaseReturns(data);
-    } catch (e) {
-      console.error('Failed to load purchase returns', e);
-    } finally {
-      setLoadingReturns(false);
-    }
-  }
-
-  useEffect(() => {
-    if (selectedOrder && openDetails) {
-      loadReturns();
-    } else {
-      setPurchaseReturns([]);
-    }
-  }, [selectedOrder, openDetails]);
-
-  const totalReturned = purchaseReturns.reduce((sum, r) => sum + r.totalAmount, 0);
 
   const handleOpenCreate = () => {
     if (selectableProducts.length > 0) {
@@ -229,6 +200,19 @@ export default function Purchasing() {
     }
   };
 
+  if (viewMode === 'detail' && selectedOrderId !== null) {
+    return (
+      <PurchaseOrderDetail
+        purchaseOrderId={selectedOrderId}
+        onBack={() => {
+          setViewMode('list');
+          setSelectedOrderId(null);
+        }}
+        onRefreshList={loadOrders}
+      />
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex justify-end items-center">
@@ -314,7 +298,7 @@ export default function Purchasing() {
                       <Button 
                         variant="ghost" 
                         size="sm" 
-                        onClick={() => { setSelectedOrder(order); setOpenDetails(true); }}
+                        onClick={() => { setSelectedOrderId(order.id!); setViewMode('detail'); }}
                         className="inline-flex items-center space-x-1.5 cursor-pointer"
                       >
                         <Eye size={14} />
@@ -480,249 +464,6 @@ export default function Purchasing() {
           </div>
         </form>
       </Dialog>
-
-      {/* View PO Details Dialog */}
-      {selectedOrder && openDetails && (
-        <Dialog 
-          open={openDetails} 
-          onClose={() => { setOpenDetails(false); setSelectedOrder(null); }} 
-          title={`Purchase Order: ${selectedOrder.orderNumber}`} 
-          size="md"
-        >
-          <div className="space-y-6 text-sm">
-            <div className="grid grid-cols-2 gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Order Date</p>
-                <p className="mt-1 font-semibold text-slate-900 dark:text-slate-100">
-                  {selectedOrder.orderDate ? new Date(selectedOrder.orderDate).toLocaleString() : '-'}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Status</p>
-                <p className="mt-1">
-                  <span className={`inline-block text-3xs font-extrabold uppercase tracking-wide px-2.5 py-0.5 rounded-full border ${
-                    selectedOrder.status === 'Received'
-                      ? 'bg-emerald-50 text-emerald-700 border-emerald-250/10 dark:bg-emerald-950/20 dark:text-emerald-400'
-                      : 'bg-amber-50 text-amber-700 border-amber-250/10 dark:bg-amber-950/20 dark:text-amber-400'
-                  }`}>
-                    {selectedOrder.status}
-                  </span>
-                </p>
-              </div>
-            </div>
-
-            <div className="border-b border-slate-100 dark:border-slate-800 pb-4">
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Supplier Details</p>
-              <div className="bg-slate-50 dark:bg-slate-950/40 border border-slate-200/40 dark:border-slate-800 rounded-xl p-3.5 space-y-1">
-                <p className="font-bold text-slate-900 dark:text-slate-100">{selectedOrder.supplier?.name}</p>
-                {selectedOrder.supplier?.contactPerson && (
-                  <p className="text-xs text-slate-550 dark:text-slate-400">Contact: {selectedOrder.supplier.contactPerson}</p>
-                )}
-                {selectedOrder.supplier?.phone && (
-                  <p className="text-xs text-slate-550 dark:text-slate-400">Phone: {selectedOrder.supplier.phone}</p>
-                )}
-                {selectedOrder.supplier?.email && (
-                  <p className="text-xs text-slate-550 dark:text-slate-400">Email: {selectedOrder.supplier.email}</p>
-                )}
-              </div>
-            </div>
-
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Order Items</p>
-              <div className="overflow-hidden border border-slate-200/50 dark:border-slate-800/60 rounded-xl">
-                <table className="w-full text-left text-xs text-slate-500 dark:text-slate-400">
-                  <thead className="bg-slate-50 dark:bg-slate-900/40 text-2xs font-extrabold uppercase tracking-wider text-slate-400 border-b border-slate-200/50 dark:border-slate-800/60">
-                    <tr>
-                      <th className="px-4 py-2.5">Product</th>
-                      <th className="px-4 py-2.5 text-right">Qty Ordered</th>
-                      <th className="px-4 py-2.5 text-right">Qty Received</th>
-                      <th className="px-4 py-2.5 text-right">Cost Price</th>
-                      <th className="px-4 py-2.5 text-right">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
-                    {selectedOrder.items.map((item) => (
-                      <tr key={item.id}>
-                        <td className="px-4 py-3 font-semibold text-slate-900 dark:text-slate-200">
-                          {item.product?.name}
-                          {item.product?.sku && <span className="block text-3xs font-normal font-mono text-slate-400 mt-0.5">{item.product.sku}</span>}
-                        </td>
-                        <td className="px-4 py-3 text-right font-bold">{item.quantityOrdered}</td>
-                        <td className="px-4 py-3 text-right font-bold">{item.quantityReceived}</td>
-                        <td className="px-4 py-3 text-right">NPR {(item.unitPrice ?? item.costPrice ?? 0).toFixed(2)}</td>
-                        <td className="px-4 py-3 text-right font-bold text-slate-900 dark:text-slate-200">
-                          NPR {((item.quantityOrdered ?? 0) * (item.unitPrice ?? item.costPrice ?? 0)).toFixed(2)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <div className="flex justify-between items-center bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100/50 dark:border-indigo-900/40 rounded-xl p-4">
-              <span className="text-xs font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400">Total Amount</span>
-              <span className="text-lg font-extrabold text-indigo-700 dark:text-indigo-400">
-                NPR {selectedOrder.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-            </div>
-
-            {/* Returns History Section */}
-            {selectedOrder.status === 'Received' && (
-              <div className="border-t border-slate-100 dark:border-slate-800 pt-4">
-                <div className="flex justify-between items-center mb-3">
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Returns History</p>
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => {
-                      const initQties: { [productId: number]: number } = {};
-                      selectedOrder.items.forEach(item => {
-                        initQties[item.productId] = 0;
-                      });
-                      setReturnQuantities(initQties);
-                      setReturnNotes('');
-                      setOpenReturn(true);
-                    }}
-                    className="cursor-pointer"
-                  >
-                    <Plus size={14} className="mr-1" />
-                    <span>Record Return</span>
-                  </Button>
-                </div>
-
-                {loadingReturns ? (
-                  <p className="text-xs text-slate-400">Loading returns...</p>
-                ) : purchaseReturns.length === 0 ? (
-                  <p className="text-xs text-slate-400 italic">No returns recorded yet.</p>
-                ) : (
-                  <div className="space-y-2 mb-3">
-                    <div className="max-h-[150px] overflow-y-auto pr-1 space-y-2">
-                      {purchaseReturns.map((r) => (
-                        <div key={r.id} className="flex justify-between items-center bg-slate-50 dark:bg-slate-950/20 border border-slate-200/40 dark:border-slate-800 rounded-xl p-2.5 text-xs">
-                          <div>
-                            <span className="font-bold text-slate-900 dark:text-slate-200">{r.returnNumber}</span>
-                            <span className="text-slate-400 mx-1.5">|</span>
-                            <span className="text-rose-600 dark:text-rose-400 font-bold">NPR {(r.totalAmount ?? 0).toFixed(2)}</span>
-                            {r.notes && <span className="text-slate-400 ml-2">({r.notes})</span>}
-                          </div>
-                          <span className="text-slate-400 font-medium">{new Date(r.returnDate).toLocaleDateString()}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="flex justify-between text-xs font-bold pt-2.5 border-t border-slate-150 dark:border-slate-800">
-                      <span className="text-slate-400">Total Returned:</span>
-                      <span className="text-rose-600">NPR {totalReturned.toFixed(2)}</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="flex justify-end pt-4 border-t border-slate-100 dark:border-slate-800">
-              <Button onClick={() => { setOpenDetails(false); setSelectedOrder(null); }}>Close</Button>
-            </div>
-          </div>
-        </Dialog>
-      )}
-
-      {/* Return Purchase Items Dialog */}
-      {selectedOrder && openReturn && (
-        <Dialog
-          open={openReturn}
-          onClose={() => setOpenReturn(false)}
-          title={`Return Items for Purchase Order: ${selectedOrder.orderNumber}`}
-          size="md"
-        >
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              const returnedItems = selectedOrder.items.map(item => {
-                const qty = returnQuantities[item.productId] ?? 0;
-                return {
-                  productId: item.productId,
-                  quantity: qty,
-                  costPrice: item.unitPrice ?? item.costPrice
-                };
-              }).filter(item => item.quantity > 0);
-
-              if (returnedItems.length === 0) {
-                alert('Please specify return quantity greater than zero for at least one product.');
-                return;
-              }
-
-              setSubmittingReturn(true);
-              try {
-                const totalAmount = returnedItems.reduce((sum, item) => sum + (item.quantity * (item.costPrice ?? 0)), 0);
-                await api.createPurchaseReturn({
-                  supplierId: selectedOrder.supplierId,
-                  purchaseOrderId: selectedOrder.id,
-                  totalAmount,
-                  notes: returnNotes,
-                  items: returnedItems
-                });
-                setOpenReturn(false);
-                await loadReturns();
-                await loadData();
-              } catch (err: any) {
-                alert(err.message || 'Failed to record purchase return');
-              } finally {
-                setSubmittingReturn(false);
-              }
-            }}
-            className="space-y-6"
-          >
-            <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
-              {selectedOrder.items.map(item => {
-                const prevReturnedQty = purchaseReturns.reduce((sum, ret) => {
-                  const retItem = ret.items?.find((ri: any) => ri.productId === item.productId);
-                  return sum + (retItem?.quantity ?? 0);
-                }, 0);
-                const maxReturn = item.quantityReceived - prevReturnedQty;
-
-                return (
-                  <div key={item.productId} className="flex gap-4 items-center justify-between py-3 border-b border-slate-100 dark:border-slate-800/40">
-                    <div className="flex-1">
-                      <p className="font-bold text-slate-850 dark:text-slate-200">{item.product?.name}</p>
-                      <p className="text-xs text-slate-400 font-semibold mt-0.5">
-                        Received: {item.quantityReceived} | Already Returned: {prevReturnedQty}
-                      </p>
-                    </div>
-                    <div className="w-32">
-                      <Input
-                        label="Return Qty"
-                        type="number"
-                        min="0"
-                        max={maxReturn}
-                        step="0.01"
-                        value={returnQuantities[item.productId] ?? 0}
-                        onChange={(e) => setReturnQuantities({ ...returnQuantities, [item.productId]: parseFloat(e.target.value) || 0 })}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <Input
-              label="Return Notes"
-              placeholder="Reason for return, condition of items, etc."
-              value={returnNotes}
-              onChange={(e) => setReturnNotes(e.target.value)}
-            />
-
-            <div className="flex justify-end space-x-3 pt-5 border-t border-slate-100 dark:border-slate-800">
-              <Button type="button" variant="outline" onClick={() => setOpenReturn(false)} disabled={submittingReturn}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={submittingReturn}>
-                {submittingReturn ? 'Saving...' : 'Submit Return'}
-              </Button>
-            </div>
-          </form>
-        </Dialog>
-      )}
     </div>
   );
 }

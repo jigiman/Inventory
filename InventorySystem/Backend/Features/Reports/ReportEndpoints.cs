@@ -38,6 +38,7 @@ public static class ReportEndpoints
 
             // Debtor KPIs - Sum of all positive outstanding balances
             var salesGroup = await db.Sales
+                .Where(s => s.Status != "Cancelled")
                 .GroupBy(s => s.CustomerId)
                 .Select(g => new { CustomerId = g.Key, Total = g.Sum(s => s.TotalAmount) })
                 .ToDictionaryAsync(x => x.CustomerId, x => x.Total);
@@ -55,6 +56,7 @@ public static class ReportEndpoints
 
             var customerIds = await db.Customers.Select(c => c.Id).ToListAsync();
             decimal totalDebtors = 0;
+            decimal customerCredits = 0;
             foreach (var cid in customerIds)
             {
                 var sales = salesGroup.GetValueOrDefault(cid, 0);
@@ -65,10 +67,15 @@ public static class ReportEndpoints
                 {
                     totalDebtors += balance;
                 }
+                else if (balance < 0)
+                {
+                    customerCredits += Math.Abs(balance);
+                }
             }
 
             // Creditor KPIs - Sum of all positive outstanding balances
             var purchasesGroup = await db.PurchaseOrders
+                .Where(po => po.Status != "Cancelled" && po.Status != "Draft")
                 .GroupBy(po => po.SupplierId)
                 .Select(g => new { SupplierId = g.Key, Total = g.Sum(po => po.TotalAmount) })
                 .ToDictionaryAsync(x => x.SupplierId, x => x.Total);
@@ -86,6 +93,7 @@ public static class ReportEndpoints
 
             var supplierIds = await db.Suppliers.Select(s => s.Id).ToListAsync();
             decimal totalCreditors = 0;
+            decimal supplierCredits = 0;
             foreach (var sid in supplierIds)
             {
                 var purchases = purchasesGroup.GetValueOrDefault(sid, 0);
@@ -95,6 +103,10 @@ public static class ReportEndpoints
                 if (balance > 0)
                 {
                     totalCreditors += balance;
+                }
+                else if (balance < 0)
+                {
+                    supplierCredits += Math.Abs(balance);
                 }
             }
 
@@ -126,7 +138,9 @@ public static class ReportEndpoints
                 LowStockCount = lowStockCount,
                 OutOfStockCount = outOfStockCount,
                 TotalDebtors = totalDebtors,
+                CustomerCredits = customerCredits,
                 TotalCreditors = totalCreditors,
+                SupplierCredits = supplierCredits,
                 RecentTransactions = recentTransactions,
                 ValuationByCategory = valuationByCategory
             });
@@ -452,6 +466,7 @@ public static class ReportEndpoints
                 title = "Debtors Balance Report";
                 headers = new List<string> { "Customer Name", "Total Sales", "Total Returns", "Total Paid", "Outstanding Balance" };
                 var sales = await db.Sales
+                    .Where(s => s.Status != "Cancelled")
                     .GroupBy(s => s.CustomerId)
                     .Select(g => new { CustomerId = g.Key, TotalSales = g.Sum(s => s.TotalAmount) })
                     .ToListAsync();
@@ -491,6 +506,7 @@ public static class ReportEndpoints
                 title = "Creditors Balance Report";
                 headers = new List<string> { "Supplier Name", "Total Purchases", "Total Returns", "Total Paid", "Outstanding Balance" };
                 var purchases = await db.PurchaseOrders
+                    .Where(po => po.Status != "Cancelled" && po.Status != "Draft")
                     .GroupBy(po => po.SupplierId)
                     .Select(g => new { SupplierId = g.Key, TotalPurchases = g.Sum(po => po.TotalAmount) })
                     .ToListAsync();

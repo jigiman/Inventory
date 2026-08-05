@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Edit2, Trash2, Plus, Search, X } from 'lucide-react';
 import { api } from '../api';
-import type { Category, Brand, Unit, Supplier } from '../api';
+import type { Category, Brand, Unit } from '../api';
 import { Button } from '../components/ui/Button';
 import { Dialog } from '../components/ui/Dialog';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
@@ -13,7 +13,6 @@ export default function Masters() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -29,7 +28,6 @@ export default function Masters() {
   const [formCategory, setFormCategory] = useState<Category>({ name: '', isArchived: false });
   const [formBrand, setFormBrand] = useState<Brand>({ name: '', isArchived: false });
   const [formUnit, setFormUnit] = useState<Unit>({ name: '' });
-  const [formSupplier, setFormSupplier] = useState<Supplier>({ name: '', contactPerson: '', phone: '', email: '', address: '', notes: '' });
 
   // Search & Dialog UI states
   const [searchTerm, setSearchTerm] = useState('');
@@ -39,16 +37,14 @@ export default function Masters() {
     setLoading(true);
     setError('');
     try {
-      const [cats, brs, uns, sups] = await Promise.all([
+      const [cats, brs, uns] = await Promise.all([
         api.getCategories(),
         api.getBrands(),
         api.getUnits(),
-        api.getSuppliers(),
       ]);
       setCategories(cats);
       setBrands(brs);
       setUnits(uns);
-      setSuppliers(sups);
     } catch (err: any) {
       setError(err.message || 'Failed to load master data');
     } finally {
@@ -66,7 +62,6 @@ export default function Masters() {
     setFormCategory({ name: '', isArchived: false });
     setFormBrand({ name: '', isArchived: false });
     setFormUnit({ name: '' });
-    setFormSupplier({ name: '', contactPerson: '', phone: '', email: '', address: '', notes: '' });
     setOpenDialog(true);
   };
 
@@ -76,7 +71,6 @@ export default function Masters() {
     if (activeTab === 0) setFormCategory(item);
     else if (activeTab === 1) setFormBrand(item);
     else if (activeTab === 2) setFormUnit(item);
-    else if (activeTab === 3) setFormSupplier(item);
     setOpenDialog(true);
   };
 
@@ -92,7 +86,6 @@ export default function Masters() {
       if (activeTab === 0) await api.deleteCategory(idToDelete);
       else if (activeTab === 1) await api.deleteBrand(idToDelete);
       else if (activeTab === 2) await api.deleteUnit(idToDelete);
-      else if (activeTab === 3) await api.deleteSupplier(idToDelete);
       loadData();
     } catch (err: any) {
       setError(err.message || 'Failed to delete item');
@@ -112,9 +105,6 @@ export default function Masters() {
       } else if (activeTab === 2) {
         if (editId) await api.updateUnit(editId, formUnit);
         else await api.createUnit(formUnit);
-      } else if (activeTab === 3) {
-        if (editId) await api.updateSupplier(editId, formSupplier);
-        else await api.createSupplier(formSupplier);
       }
       setOpenDialog(false);
       loadData();
@@ -123,19 +113,11 @@ export default function Masters() {
     }
   };
 
-  const tabs = ['Categories', 'Brands', 'Units', 'Suppliers'];
+  const tabs = ['Categories', 'Brands', 'Units'];
 
   const filteredCategories = categories.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()));
   const filteredBrands = brands.filter(b => b.name.toLowerCase().includes(searchTerm.toLowerCase()));
   const filteredUnits = units.filter(u => u.name.toLowerCase().includes(searchTerm.toLowerCase()));
-  const filteredSuppliers = suppliers.filter(s => 
-    s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (s.contactPerson && s.contactPerson.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (s.phone && s.phone.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (s.email && s.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (s.address && s.address.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (s.notes && s.notes.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
 
   return (
     <div className="space-y-4">
@@ -318,39 +300,9 @@ export default function Masters() {
                   </td>
                 </tr>
               ))}
-              {activeTab === 3 && filteredSuppliers.map((sup) => (
-                <tr key={sup.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/10 transition-colors">
-                  <td className="px-6 py-3.5 font-bold text-slate-900 dark:text-slate-200">{sup.name}</td>
-                  <td className="px-6 py-3.5 text-slate-700 dark:text-slate-300">{sup.contactPerson}</td>
-                  <td className="px-6 py-3.5 text-slate-700 dark:text-slate-300">{sup.phone}</td>
-                  <td className="px-6 py-3.5 text-slate-700 dark:text-slate-300">{sup.email}</td>
-                  <td className="px-6 py-3.5 truncate max-w-xs text-slate-700 dark:text-slate-300">{sup.address}</td>
-                  <td className="px-6 py-3.5 text-right whitespace-nowrap">
-                    <div className="flex gap-2 justify-end items-center">
-                      <button 
-                        type="button" 
-                        onClick={() => handleOpenEdit(sup)} 
-                        className="flex items-center justify-center p-1.5 rounded-lg border border-slate-200/60 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-655 dark:text-slate-350 cursor-pointer transition-colors" 
-                        title="Edit"
-                      >
-                        <Edit2 size={13} />
-                      </button>
-                      <button 
-                        type="button" 
-                        onClick={() => handleDelete(sup.id!)} 
-                        className="flex items-center justify-center p-1.5 rounded-lg border border-slate-200/60 dark:border-slate-800 hover:bg-rose-50 dark:hover:bg-rose-950/20 text-rose-500 cursor-pointer transition-colors" 
-                        title="Delete"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
               {((activeTab === 0 && filteredCategories.length === 0) ||
                 (activeTab === 1 && filteredBrands.length === 0) ||
-                (activeTab === 2 && filteredUnits.length === 0) ||
-                (activeTab === 3 && filteredSuppliers.length === 0)) && (
+                (activeTab === 2 && filteredUnits.length === 0)) && (
                 <tr>
                   <td colSpan={10} className="py-12 text-center text-slate-400 font-medium">
                     No master records found.
@@ -366,7 +318,7 @@ export default function Masters() {
       <Dialog 
         open={openDialog} 
         onClose={() => setOpenDialog(false)} 
-        title={`${editId ? 'Edit' : 'Add'} ${activeTab === 0 ? 'Category' : activeTab === 1 ? 'Brand' : activeTab === 2 ? 'Unit' : 'Supplier'}`}
+        title={`${editId ? 'Edit' : 'Add'} ${activeTab === 0 ? 'Category' : activeTab === 1 ? 'Brand' : 'Unit'}`}
         size="md"
       >
         <form onSubmit={handleSave} className="space-y-5">
@@ -394,34 +346,6 @@ export default function Masters() {
           )}
           {activeTab === 2 && (
             <Input label="Unit Name" required value={formUnit.name} onChange={(e) => setFormUnit({ ...formUnit, name: e.target.value })} />
-          )}
-          {activeTab === 3 && (
-            <div className="space-y-4">
-              <Input label="Supplier Name" required value={formSupplier.name} onChange={(e) => setFormSupplier({ ...formSupplier, name: e.target.value })} />
-              <div className="grid grid-cols-2 gap-4">
-                <Input label="Contact Person" value={formSupplier.contactPerson || ''} onChange={(e) => setFormSupplier({ ...formSupplier, contactPerson: e.target.value })} />
-                <Input label="Phone" value={formSupplier.phone || ''} onChange={(e) => setFormSupplier({ ...formSupplier, phone: e.target.value })} />
-              </div>
-              <Input label="Email" type="email" value={formSupplier.email || ''} onChange={(e) => setFormSupplier({ ...formSupplier, email: e.target.value })} />
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">Address</label>
-                <textarea
-                  className="flex w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400/80 focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 dark:placeholder-slate-600 dark:focus:border-indigo-400 dark:focus:ring-indigo-400/10 transition-all duration-200"
-                  rows={2}
-                  value={formSupplier.address || ''} 
-                  onChange={(e) => setFormSupplier({ ...formSupplier, address: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">Notes</label>
-                <textarea
-                  className="flex w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400/80 focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 dark:placeholder-slate-600 dark:focus:border-indigo-400 dark:focus:ring-indigo-400/10 transition-all duration-200"
-                  rows={2}
-                  value={formSupplier.notes || ''} 
-                  onChange={(e) => setFormSupplier({ ...formSupplier, notes: e.target.value })}
-                />
-              </div>
-            </div>
           )}
 
           <div className="flex justify-end space-x-3 pt-5 border-t border-slate-100 dark:border-slate-800">

@@ -14,6 +14,12 @@ public static class SupplierEndpoints
         app.MapGet("/api/suppliers", async (AppDbContext db) => 
             await db.Suppliers.ToListAsync());
 
+        app.MapGet("/api/suppliers/{id:int}", async (AppDbContext db, int id) =>
+        {
+            var supplier = await db.Suppliers.FindAsync(id);
+            return supplier != null ? Results.Ok(supplier) : Results.NotFound();
+        });
+
         app.MapPost("/api/suppliers", async (AppDbContext db, Supplier supplier) =>
         {
             if (string.IsNullOrWhiteSpace(supplier.Name))

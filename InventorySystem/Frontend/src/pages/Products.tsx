@@ -1,15 +1,16 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Edit2, Trash2, Plus, Search, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Eye, X } from 'lucide-react';
 import { api } from '../api';
 import type { Product, Category, Brand, Unit, Supplier } from '../api';
 import { Button } from '../components/ui/Button';
 import { Dialog } from '../components/ui/Dialog';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
-import { Input } from '../components/ui/Input';
-import { Select } from '../components/ui/Select';
-import { Switch } from '../components/ui/Switch';
+import ProductForm from './ProductForm';
 
 export default function Products() {
+  const [viewMode, setViewMode] = useState<'list' | 'create' | 'edit'>('list');
+  const [editProductId, setEditProductId] = useState<number | null>(null);
+
   const [products, setProducts] = useState<Product[]>([]);
   const [totalProducts, setTotalProducts] = useState(0);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -19,9 +20,6 @@ export default function Products() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
-  const [openDialog, setOpenDialog] = useState(false);
-  const [editId, setEditId] = useState<number | null>(null);
-
   // Supplier stock details dialog states
   const [openStockDetails, setOpenStockDetails] = useState(false);
   const [selectedStockProduct, setSelectedStockProduct] = useState<any | null>(null);
@@ -39,20 +37,7 @@ export default function Products() {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const itemsPerPage = 50;
 
-  // Variants state
-  const [hasVariants, setHasVariants] = useState(false);
-  const [variantsList, setVariantsList] = useState<any[]>([]);
   const [expandedProductIds, setExpandedProductIds] = useState<Record<number, boolean>>({});
-
-  const [formProduct, setFormProduct] = useState<Product>({
-    sku: '', name: '', description: '',
-    categoryId: 0, brandId: 0, unitId: 0, supplierId: 0,
-    costPrice: 0, sellingPrice: 0,
-    openingQuantity: 0, currentQuantity: 0,
-    reorderLevel: 0, maximumStock: 0,
-    leadTime: 0, productImage: '',
-    isActive: true, notes: ''
-  });
 
   // Debounce search term
   useEffect(() => {
@@ -126,22 +111,8 @@ export default function Products() {
   }, [currentPage, debouncedSearchValue]);
 
   const handleOpenAdd = () => {
-    setEditId(null);
-    setHasVariants(false);
-    setVariantsList([]);
-    setFormProduct({
-      sku: '', name: '', description: '',
-      categoryId: categories[0]?.id || 0,
-      brandId: brands[0]?.id || 0,
-      unitId: units[0]?.id || 0,
-      supplierId: suppliers[0]?.id || 0,
-      costPrice: 0, sellingPrice: 0,
-      openingQuantity: 0, currentQuantity: 0,
-      reorderLevel: 0, maximumStock: 0,
-      leadTime: 0, productImage: '',
-      isActive: true, notes: ''
-    });
-    setOpenDialog(true);
+    setEditProductId(null);
+    setViewMode('create');
   };
 
   const handleViewStock = async (productOrVariant: any) => {
@@ -160,27 +131,8 @@ export default function Products() {
   };
 
   const handleOpenEdit = (product: Product) => {
-    setEditId(product.id!);
-    if (product.variants && product.variants.length > 0) {
-      setHasVariants(true);
-      setVariantsList(product.variants.map(v => ({
-        id: v.id,
-        sku: v.sku,
-        variantValues: v.variantValues || '',
-        costPrice: v.costPrice,
-        sellingPrice: v.sellingPrice,
-        openingQuantity: v.openingQuantity,
-        currentQuantity: v.currentQuantity,
-        reorderLevel: v.reorderLevel,
-        maximumStock: v.maximumStock,
-        isActive: v.isActive
-      })));
-    } else {
-      setHasVariants(false);
-      setVariantsList([]);
-    }
-    setFormProduct({ ...product });
-    setOpenDialog(true);
+    setEditProductId(product.id!);
+    setViewMode('edit');
   };
 
   const handleDelete = (id: number) => {
@@ -195,25 +147,6 @@ export default function Products() {
       loadData();
     } catch (err: any) {
       setError(err.message || 'Failed to delete product');
-    }
-  };
-
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const productPayload = {
-        ...formProduct,
-        variants: hasVariants ? variantsList : []
-      };
-      if (editId) {
-        await api.updateProduct(editId, productPayload);
-      } else {
-        await api.createProduct(productPayload);
-      }
-      setOpenDialog(false);
-      loadData();
-    } catch (err: any) {
-      alert(err.message || 'Failed to save product');
     }
   };
 
@@ -271,6 +204,27 @@ export default function Products() {
       setCurrentPage(page);
     }
   };
+
+  if (viewMode === 'create' || viewMode === 'edit') {
+    return (
+      <ProductForm
+        productId={editProductId}
+        categories={categories}
+        brands={brands}
+        units={units}
+        suppliers={suppliers}
+        onBack={() => {
+          setViewMode('list');
+          setEditProductId(null);
+        }}
+        onSuccess={() => {
+          setViewMode('list');
+          setEditProductId(null);
+          loadData();
+        }}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col h-full space-y-4">
@@ -549,349 +503,6 @@ export default function Products() {
           )}
         </div>
       )}
-
-      {/* Add / Edit Dialog */}
-      <Dialog 
-        open={openDialog} 
-        onClose={() => setOpenDialog(false)} 
-        title={editId ? 'Edit Product' : 'Add New Product'}
-        size="lg"
-      >
-        <form onSubmit={handleSave} className="space-y-6">
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-            <Input 
-              label="Product Name" 
-              required 
-              value={formProduct.name} 
-              onChange={(e) => setFormProduct({ ...formProduct, name: e.target.value })} 
-            />
-            <div className="flex items-center pt-7">
-              <Switch 
-                checked={hasVariants} 
-                onChange={(checked) => setHasVariants(checked)} 
-                label="This product has variants (e.g. Size, Color)"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">Description</label>
-            <textarea
-              className="flex w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400/80 focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 dark:placeholder-slate-600 dark:focus:border-indigo-400 dark:focus:ring-indigo-400/10 transition-all duration-200"
-              rows={2}
-              value={formProduct.description || ''} 
-              onChange={(e) => setFormProduct({ ...formProduct, description: e.target.value })}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 md:grid-cols-4">
-            <Select 
-              label="Category" 
-              required
-              value={formProduct.categoryId}
-              onChange={(e) => setFormProduct({ ...formProduct, categoryId: Number(e.target.value) })}
-            >
-              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </Select>
-
-            <Select 
-              label="Brand" 
-              required
-              value={formProduct.brandId}
-              onChange={(e) => setFormProduct({ ...formProduct, brandId: Number(e.target.value) })}
-            >
-              {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-            </Select>
-
-            <Select 
-              label="Unit" 
-              required
-              value={formProduct.unitId}
-              onChange={(e) => setFormProduct({ ...formProduct, unitId: Number(e.target.value) })}
-            >
-              {units.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-            </Select>
-
-            <Select 
-              label="Supplier" 
-              required
-              value={formProduct.supplierId}
-              onChange={(e) => setFormProduct({ ...formProduct, supplierId: Number(e.target.value) })}
-            >
-              {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </Select>
-          </div>
-
-          {!hasVariants ? (
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 md:grid-cols-4">
-              <Input 
-                label="SKU" 
-                value={formProduct.sku} 
-                onChange={(e) => setFormProduct({ ...formProduct, sku: e.target.value })} 
-              />
-              <Input 
-                label="Cost Price" 
-                type="number" 
-                step="0.01" 
-                min="0" 
-                required={!hasVariants} 
-                value={formProduct.costPrice} 
-                onChange={(e) => setFormProduct({ ...formProduct, costPrice: parseFloat(e.target.value) || 0 })} 
-              />
-              <Input 
-                label="Selling Price" 
-                type="number" 
-                step="0.01" 
-                min="0" 
-                required={!hasVariants} 
-                value={formProduct.sellingPrice} 
-                onChange={(e) => setFormProduct({ ...formProduct, sellingPrice: parseFloat(e.target.value) || 0 })} 
-              />
-              <Input 
-                label="Opening Qty" 
-                type="number" 
-                min="0" 
-                disabled={!!editId}
-                required={!hasVariants} 
-                value={formProduct.openingQuantity} 
-                onChange={(e) => setFormProduct({ ...formProduct, openingQuantity: parseFloat(e.target.value) || 0 })} 
-              />
-            </div>
-          ) : null}
-
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 md:grid-cols-4 items-end">
-            {!hasVariants && (
-              <>
-                <Input 
-                  label="Reorder Level" 
-                  type="number" 
-                  min="0" 
-                  required={!hasVariants} 
-                  value={formProduct.reorderLevel} 
-                  onChange={(e) => setFormProduct({ ...formProduct, reorderLevel: parseFloat(e.target.value) || 0 })} 
-                />
-                <Input 
-                  label="Maximum Stock" 
-                  type="number" 
-                  min="0" 
-                  required={!hasVariants} 
-                  value={formProduct.maximumStock} 
-                  onChange={(e) => setFormProduct({ ...formProduct, maximumStock: parseFloat(e.target.value) || 0 })} 
-                />
-              </>
-            )}
-
-            <Input 
-              label="Lead Time (Days)" 
-              type="number" 
-              min="0" 
-              required 
-              value={formProduct.leadTime} 
-              onChange={(e) => setFormProduct({ ...formProduct, leadTime: parseInt(e.target.value) || 0 })} 
-            />
-            <div className="py-2.5">
-              <Switch 
-                checked={formProduct.isActive} 
-                onChange={(checked) => setFormProduct({ ...formProduct, isActive: checked })} 
-                label="Active Status"
-              />
-            </div>
-          </div>
-
-          {hasVariants && (
-            <div className="space-y-4 border-t border-slate-100 dark:border-slate-800 pt-4">
-              <div className="flex justify-between items-center">
-                <h4 className="text-sm font-bold text-slate-900 dark:text-slate-200">Manage Variants</h4>
-                <Button 
-                  type="button" 
-                  size="sm" 
-                  variant="outline" 
-                  onClick={() => setVariantsList(prev => [
-                    ...prev, 
-                    { sku: '', variantValues: '', costPrice: 0, sellingPrice: 0, openingQuantity: 0, reorderLevel: 0, maximumStock: 0, isActive: true }
-                  ])}
-                  className="text-xs font-semibold inline-flex items-center"
-                >
-                  <Plus size={12} className="mr-1" /> Add Variant Option
-                </Button>
-              </div>
-
-              {variantsList.length === 0 ? (
-                <p className="text-xs text-slate-400 text-center py-4 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
-                  No variants added yet. Click 'Add Variant Option' above to create one.
-                </p>
-              ) : (
-                <div className="overflow-x-auto rounded-xl border border-slate-200/60 dark:border-slate-800">
-                  <table className="w-full text-left text-xs text-slate-500 dark:text-slate-400">
-                    <thead className="bg-slate-550/5 dark:bg-slate-900/60 text-3xs font-extrabold uppercase tracking-wider text-slate-400 border-b border-slate-200/50 dark:border-slate-800/60 select-none">
-                      <tr>
-                        <th className="px-3 py-2 w-1/4">Attributes (e.g. Red, L)</th>
-                        <th className="px-3 py-2 w-1/5">SKU</th>
-                        <th className="px-3 py-2 text-right">Cost</th>
-                        <th className="px-3 py-2 text-right">Price</th>
-                        <th className="px-3 py-2 text-right w-16">Opening Qty</th>
-                        <th className="px-3 py-2 text-right w-16">Reorder</th>
-                        <th className="px-3 py-2 text-right w-16">Max</th>
-                        <th className="px-3 py-2 text-center w-10">Active</th>
-                        <th className="px-3 py-2 text-center w-10">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                      {variantsList.map((variant, index) => (
-                        <tr key={index} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/10">
-                          <td className="px-3 py-2">
-                            <input
-                              type="text"
-                              required
-                              value={variant.variantValues}
-                              onChange={(e) => {
-                                const newVariants = [...variantsList];
-                                newVariants[index].variantValues = e.target.value;
-                                setVariantsList(newVariants);
-                              }}
-                              className="w-full px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
-                              placeholder="Red, L"
-                            />
-                          </td>
-                          <td className="px-3 py-2">
-                            <input
-                              type="text"
-                              value={variant.sku}
-                              onChange={(e) => {
-                                const newVariants = [...variantsList];
-                                newVariants[index].sku = e.target.value;
-                                setVariantsList(newVariants);
-                              }}
-                              className="w-full px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
-                              placeholder="SKU-XXXX"
-                            />
-                          </td>
-                          <td className="px-3 py-2 text-right">
-                            <input
-                              type="number"
-                              required
-                              min="0"
-                              step="0.01"
-                              value={variant.costPrice}
-                              onChange={(e) => {
-                                const newVariants = [...variantsList];
-                                newVariants[index].costPrice = parseFloat(e.target.value) || 0;
-                                setVariantsList(newVariants);
-                              }}
-                              className="w-20 px-2 py-1 text-xs text-right rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
-                            />
-                          </td>
-                          <td className="px-3 py-2 text-right">
-                            <input
-                              type="number"
-                              required
-                              min="0"
-                              step="0.01"
-                              value={variant.sellingPrice}
-                              onChange={(e) => {
-                                const newVariants = [...variantsList];
-                                newVariants[index].sellingPrice = parseFloat(e.target.value) || 0;
-                                setVariantsList(newVariants);
-                              }}
-                              className="w-20 px-2 py-1 text-xs text-right rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
-                            />
-                          </td>
-                          <td className="px-3 py-2 text-right">
-                            <input
-                              type="number"
-                              required
-                              min="0"
-                              disabled={variant.id > 0}
-                              value={variant.openingQuantity}
-                              onChange={(e) => {
-                                const newVariants = [...variantsList];
-                                newVariants[index].openingQuantity = parseFloat(e.target.value) || 0;
-                                setVariantsList(newVariants);
-                              }}
-                              className="w-16 px-2 py-1 text-xs text-right rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500 disabled:opacity-50"
-                            />
-                          </td>
-                          <td className="px-3 py-2 text-right">
-                            <input
-                              type="number"
-                              required
-                              min="0"
-                              value={variant.reorderLevel}
-                              onChange={(e) => {
-                                const newVariants = [...variantsList];
-                                newVariants[index].reorderLevel = parseFloat(e.target.value) || 0;
-                                setVariantsList(newVariants);
-                              }}
-                              className="w-16 px-2 py-1 text-xs text-right rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
-                            />
-                          </td>
-                          <td className="px-3 py-2 text-right">
-                            <input
-                              type="number"
-                              required
-                              min="0"
-                              value={variant.maximumStock}
-                              onChange={(e) => {
-                                const newVariants = [...variantsList];
-                                newVariants[index].maximumStock = parseFloat(e.target.value) || 0;
-                                setVariantsList(newVariants);
-                              }}
-                              className="w-16 px-2 py-1 text-xs text-right rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
-                            />
-                          </td>
-                          <td className="px-3 py-2 text-center">
-                            <input
-                              type="checkbox"
-                              checked={variant.isActive}
-                              onChange={(e) => {
-                                const newVariants = [...variantsList];
-                                newVariants[index].isActive = e.target.checked;
-                                setVariantsList(newVariants);
-                              }}
-                              className="rounded border-slate-350 text-indigo-650 focus:ring-indigo-550 h-3.5 w-3.5 cursor-pointer"
-                            />
-                          </td>
-                          <td className="px-3 py-2 text-center">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const newVariants = variantsList.filter((_, idx) => idx !== index);
-                                setVariantsList(newVariants);
-                              }}
-                              className="p-1 rounded text-rose-650 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer"
-                            >
-                              <Trash2 size={12} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
-
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">Notes</label>
-            <textarea
-              className="flex w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400/80 focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 dark:placeholder-slate-600 dark:focus:border-indigo-400 dark:focus:ring-indigo-400/10 transition-all duration-200"
-              rows={2}
-              value={formProduct.notes || ''} 
-              onChange={(e) => setFormProduct({ ...formProduct, notes: e.target.value })}
-            />
-          </div>
-
-          <div className="flex justify-end space-x-3 pt-5 border-t border-slate-100 dark:border-slate-800">
-            <Button type="button" variant="outline" onClick={() => setOpenDialog(false)}>
-              Cancel
-            </Button>
-            <Button type="submit">
-              Save Product
-            </Button>
-          </div>
-        </form>
-      </Dialog>
 
       <ConfirmDialog
         open={confirmDeleteId !== null}

@@ -185,6 +185,7 @@ export interface PurchaseOrder {
   orderDate?: string;
   status?: string;
   totalAmount: number;
+  notes?: string;
   items: PurchaseItem[];
 }
 
@@ -372,6 +373,7 @@ export const api = {
 
   // Suppliers
   getSuppliers: () => request<Supplier[]>('/api/suppliers'),
+  getSupplier: (id: number) => request<Supplier>(`/api/suppliers/${id}`),
   createSupplier: (supplier: Supplier) => request<Supplier>('/api/suppliers', { method: 'POST', body: JSON.stringify(supplier) }),
   updateSupplier: (id: number, supplier: Supplier) => request<Supplier>(`/api/suppliers/${id}`, { method: 'PUT', body: JSON.stringify(supplier) }),
   deleteSupplier: (id: number) => request<void>(`/api/suppliers/${id}`, { method: 'DELETE' }),
@@ -388,13 +390,14 @@ export const api = {
     if (search) url += `&search=${encodeURIComponent(search)}`;
     return request<PaginatedResult<Product>>(url);
   },
+  getProduct: (id: number) => request<Product>(`/api/products/${id}`),
   createProduct: (product: Product) => request<Product>('/api/products', { method: 'POST', body: JSON.stringify(product) }),
   updateProduct: (id: number, product: Product) => request<Product>(`/api/products/${id}`, { method: 'PUT', body: JSON.stringify(product) }),
   deleteProduct: (id: number) => request<void>(`/api/products/${id}`, { method: 'DELETE' }),
   getProductBatches: (id: number) => request<any[]>(`/api/products/${id}/batches`),
 
   // Purchase Orders
-  getPurchaseOrders: (params?: { page?: number; pageSize?: number; search?: string; status?: string; startDate?: string; endDate?: string }) => {
+  getPurchaseOrders: (params?: { page?: number; pageSize?: number; search?: string; status?: string; startDate?: string; endDate?: string; supplierId?: number }) => {
     let url = '/api/purchase-orders';
     if (params) {
       const q = new URLSearchParams();
@@ -404,10 +407,12 @@ export const api = {
       if (params.status) q.append('status', params.status);
       if (params.startDate) q.append('startDate', params.startDate);
       if (params.endDate) q.append('endDate', params.endDate);
+      if (params.supplierId) q.append('supplierId', params.supplierId.toString());
       url += '?' + q.toString();
     }
     return request<PaginatedResult<PurchaseOrder>>(url);
   },
+  getPurchaseOrder: (id: number) => request<PurchaseOrder>(`/api/purchase-orders/${id}`),
   createPurchaseOrder: (po: PurchaseOrder) => request<PurchaseOrder>('/api/purchase-orders', { method: 'POST', body: JSON.stringify(po) }),
   receivePurchaseOrder: (id: number, items: { productId: number; quantityReceived: number }[]) =>
     request<PurchaseOrder>(`/api/purchase-orders/${id}/receive`, { method: 'POST', body: JSON.stringify(items) }),
@@ -482,13 +487,14 @@ export const api = {
     return request<PaginatedResult<FinanceReportItem>>(url);
   },
   recordPayment: (payment: Payment) => request<Payment>('/api/payments', { method: 'POST', body: JSON.stringify(payment) }),
-  getPayments: (params?: { saleId?: number; purchaseOrderId?: number; customerId?: number }) => {
+  getPayments: (params?: { saleId?: number; purchaseOrderId?: number; customerId?: number; supplierId?: number }) => {
     let url = '/api/payments';
     if (params) {
       const q = new URLSearchParams();
       if (params.saleId) q.append('saleId', params.saleId.toString());
       if (params.purchaseOrderId) q.append('purchaseOrderId', params.purchaseOrderId.toString());
       if (params.customerId) q.append('customerId', params.customerId.toString());
+      if (params.supplierId) q.append('supplierId', params.supplierId.toString());
       url += '?' + q.toString();
     }
     return request<Payment[]>(url);
@@ -520,7 +526,9 @@ export const api = {
     lowStockCount: number;
     outOfStockCount: number;
     totalDebtors: number;
+    customerCredits?: number;
     totalCreditors: number;
+    supplierCredits?: number;
     recentTransactions: {
       id: number;
       transactionDate: string;
