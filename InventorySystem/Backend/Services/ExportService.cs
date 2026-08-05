@@ -128,12 +128,6 @@ public class ExportService
                     {
                         row.RelativeItem().Column(c =>
                         {
-                            c.Item().Text(storeName).Bold().FontSize(16).FontColor(Colors.Indigo.Darken2);
-                            c.Item().Text("TAX / SALES INVOICE").FontSize(9.5f).Bold().FontColor(Colors.Grey.Darken1);
-                        });
-
-                        row.RelativeItem().AlignRight().Column(c =>
-                        {
                             c.Item().Text($"Invoice #: {sale.SaleNumber}").Bold().FontSize(10.5f);
                             c.Item().Text($"Date: {sale.SaleDate:yyyy-MM-dd HH:mm}").FontSize(9).FontColor(Colors.Grey.Darken2);
                         });
