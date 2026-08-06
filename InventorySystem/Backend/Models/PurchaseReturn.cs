@@ -25,5 +25,9 @@ public class PurchaseReturn
 
     public string Notes { get; set; } = string.Empty;
 
+    public string SettlementMethod { get; set; } = "StoreCredit"; // StoreCredit (Adjust on next purchase) or Refund (Immediate Cash/Check)
+
+    public string PaymentMethod { get; set; } = string.Empty; // Cash, Cheque, Bank Transfer (if SettlementMethod == "Refund")
+
     public List<PurchaseReturnItem> Items { get; set; } = new();
 }

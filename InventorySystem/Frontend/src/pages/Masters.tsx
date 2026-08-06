@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Edit2, Trash2, Plus, Search, X } from 'lucide-react';
 import { api } from '../api';
-import type { Category, Brand, Unit } from '../api';
+import type { Category, Brand, Unit, Charge } from '../api';
 import { Button } from '../components/ui/Button';
 import { Dialog } from '../components/ui/Dialog';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
@@ -13,6 +13,7 @@ export default function Masters() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
+  const [charges, setCharges] = useState<Charge[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -28,6 +29,7 @@ export default function Masters() {
   const [formCategory, setFormCategory] = useState<Category>({ name: '', isArchived: false });
   const [formBrand, setFormBrand] = useState<Brand>({ name: '', isArchived: false });
   const [formUnit, setFormUnit] = useState<Unit>({ name: '' });
+  const [formCharge, setFormCharge] = useState<Charge>({ name: '', defaultAmount: 0, description: '', isArchived: false });
 
   // Search & Dialog UI states
   const [searchTerm, setSearchTerm] = useState('');
@@ -37,14 +39,16 @@ export default function Masters() {
     setLoading(true);
     setError('');
     try {
-      const [cats, brs, uns] = await Promise.all([
+      const [cats, brs, uns, chs] = await Promise.all([
         api.getCategories(),
         api.getBrands(),
         api.getUnits(),
+        api.getCharges(true),
       ]);
       setCategories(cats);
       setBrands(brs);
       setUnits(uns);
+      setCharges(chs);
     } catch (err: any) {
       setError(err.message || 'Failed to load master data');
     } finally {
@@ -62,6 +66,7 @@ export default function Masters() {
     setFormCategory({ name: '', isArchived: false });
     setFormBrand({ name: '', isArchived: false });
     setFormUnit({ name: '' });
+    setFormCharge({ name: '', defaultAmount: 0, description: '', isArchived: false });
     setOpenDialog(true);
   };
 
@@ -71,6 +76,7 @@ export default function Masters() {
     if (activeTab === 0) setFormCategory(item);
     else if (activeTab === 1) setFormBrand(item);
     else if (activeTab === 2) setFormUnit(item);
+    else if (activeTab === 3) setFormCharge(item);
     setOpenDialog(true);
   };
 
@@ -86,6 +92,7 @@ export default function Masters() {
       if (activeTab === 0) await api.deleteCategory(idToDelete);
       else if (activeTab === 1) await api.deleteBrand(idToDelete);
       else if (activeTab === 2) await api.deleteUnit(idToDelete);
+      else if (activeTab === 3) await api.deleteCharge(idToDelete);
       loadData();
     } catch (err: any) {
       setError(err.message || 'Failed to delete item');
@@ -105,6 +112,9 @@ export default function Masters() {
       } else if (activeTab === 2) {
         if (editId) await api.updateUnit(editId, formUnit);
         else await api.createUnit(formUnit);
+      } else if (activeTab === 3) {
+        if (editId) await api.updateCharge(editId, formCharge);
+        else await api.createCharge(formCharge);
       }
       setOpenDialog(false);
       loadData();
@@ -113,11 +123,12 @@ export default function Masters() {
     }
   };
 
-  const tabs = ['Categories', 'Brands', 'Units'];
+  const tabs = ['Categories', 'Brands', 'Units', 'Charges'];
 
   const filteredCategories = categories.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()));
   const filteredBrands = brands.filter(b => b.name.toLowerCase().includes(searchTerm.toLowerCase()));
   const filteredUnits = units.filter(u => u.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filteredCharges = charges.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()) || (c.description && c.description.toLowerCase().includes(searchTerm.toLowerCase())));
 
   return (
     <div className="space-y-4">
@@ -145,7 +156,7 @@ export default function Masters() {
 
         <Button onClick={handleOpenAdd} className="inline-flex items-center space-x-2">
           <Plus size={16} />
-          <span>Add {activeTab === 0 ? 'Category' : activeTab === 1 ? 'Brand' : activeTab === 2 ? 'Unit' : 'Supplier'}</span>
+          <span>Add {activeTab === 0 ? 'Category' : activeTab === 1 ? 'Brand' : activeTab === 2 ? 'Unit' : 'Charge'}</span>
         </Button>
       </div>
 
@@ -156,7 +167,7 @@ export default function Masters() {
       )}
 
       {/* Modern Pill Tabs */}
-      <div className="flex bg-slate-100 dark:bg-slate-900/60 p-1.5 rounded-2xl max-w-md border border-slate-200/20 dark:border-slate-800/40">
+      <div className="flex bg-slate-100 dark:bg-slate-900/60 p-1.5 rounded-2xl max-w-lg border border-slate-200/20 dark:border-slate-800/40">
         {tabs.map((tab, idx) => (
           <button
             key={tab}
@@ -205,11 +216,10 @@ export default function Masters() {
               )}
               {activeTab === 3 && (
                 <tr>
-                  <th className="px-6 py-4">Name</th>
-                  <th className="px-6 py-4">Contact</th>
-                  <th className="px-6 py-4">Phone</th>
-                  <th className="px-6 py-4">Email</th>
-                  <th className="px-6 py-4">Address</th>
+                  <th className="px-6 py-4">Charge Name</th>
+                  <th className="px-6 py-4">Default Amount</th>
+                  <th className="px-6 py-4">Description</th>
+                  <th className="px-6 py-4">Archived</th>
                   <th className="px-6 py-4 text-right">Actions</th>
                 </tr>
               )}
@@ -300,9 +310,42 @@ export default function Masters() {
                   </td>
                 </tr>
               ))}
+              {activeTab === 3 && filteredCharges.map((ch) => (
+                <tr key={ch.id} className={`hover:bg-slate-50/50 dark:hover:bg-slate-800/10 transition-colors ${ch.isArchived ? 'opacity-60 italic' : ''}`}>
+                  <td className="px-6 py-3.5 font-bold text-slate-900 dark:text-slate-200">{ch.name}</td>
+                  <td className="px-6 py-3.5 font-semibold text-slate-700 dark:text-slate-300">NPR {ch.defaultAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                  <td className="px-6 py-3.5 text-xs text-slate-500 dark:text-slate-400">{ch.description || '-'}</td>
+                  <td className="px-6 py-3.5">
+                    <span className={`inline-flex px-2 py-0.5 rounded-full text-3xs font-extrabold uppercase tracking-wide border ${ch.isArchived ? 'bg-amber-50 text-amber-700 border-amber-200/30' : 'bg-emerald-50 text-emerald-700 border-emerald-200/30 dark:bg-emerald-950/20 dark:text-emerald-400'}`}>
+                      {ch.isArchived ? 'Yes' : 'No'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-3.5 text-right">
+                    <div className="flex gap-2 justify-end items-center">
+                      <button 
+                        type="button" 
+                        onClick={() => handleOpenEdit(ch)} 
+                        className="flex items-center justify-center p-1.5 rounded-lg border border-slate-200/60 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-650 dark:text-slate-350 cursor-pointer transition-colors" 
+                        title="Edit"
+                      >
+                        <Edit2 size={13} />
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={() => handleDelete(ch.id!)} 
+                        className="flex items-center justify-center p-1.5 rounded-lg border border-slate-200/60 dark:border-slate-800 hover:bg-rose-50 dark:hover:bg-rose-950/20 text-rose-500 cursor-pointer transition-colors" 
+                        title="Delete"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
               {((activeTab === 0 && filteredCategories.length === 0) ||
                 (activeTab === 1 && filteredBrands.length === 0) ||
-                (activeTab === 2 && filteredUnits.length === 0)) && (
+                (activeTab === 2 && filteredUnits.length === 0) ||
+                (activeTab === 3 && filteredCharges.length === 0)) && (
                 <tr>
                   <td colSpan={10} className="py-12 text-center text-slate-400 font-medium">
                     No master records found.
@@ -318,7 +361,7 @@ export default function Masters() {
       <Dialog 
         open={openDialog} 
         onClose={() => setOpenDialog(false)} 
-        title={`${editId ? 'Edit' : 'Add'} ${activeTab === 0 ? 'Category' : activeTab === 1 ? 'Brand' : 'Unit'}`}
+        title={`${editId ? 'Edit' : 'Add'} ${activeTab === 0 ? 'Category' : activeTab === 1 ? 'Brand' : activeTab === 2 ? 'Unit' : 'Charge'}`}
         size="md"
       >
         <form onSubmit={handleSave} className="space-y-5">
@@ -346,6 +389,16 @@ export default function Masters() {
           )}
           {activeTab === 2 && (
             <Input label="Unit Name" required value={formUnit.name} onChange={(e) => setFormUnit({ ...formUnit, name: e.target.value })} />
+          )}
+          {activeTab === 3 && (
+            <div className="space-y-4">
+              <Input label="Charge Name (e.g. Loading, Freight)" required value={formCharge.name} onChange={(e) => setFormCharge({ ...formCharge, name: e.target.value })} />
+              <Input label="Default Amount" type="number" step="0.01" required value={formCharge.defaultAmount || ''} onChange={(e) => setFormCharge({ ...formCharge, defaultAmount: parseFloat(e.target.value) || 0 })} />
+              <Input label="Description (Optional)" value={formCharge.description || ''} onChange={(e) => setFormCharge({ ...formCharge, description: e.target.value })} />
+              <div className="pt-2">
+                <Switch checked={!!formCharge.isArchived} onChange={(checked) => setFormCharge({ ...formCharge, isArchived: checked })} label="Archived" />
+              </div>
+            </div>
           )}
 
           <div className="flex justify-end space-x-3 pt-5 border-t border-slate-100 dark:border-slate-800">

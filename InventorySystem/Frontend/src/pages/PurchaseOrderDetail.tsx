@@ -28,6 +28,8 @@ export default function PurchaseOrderDetail({ purchaseOrderId, onBack, onRefresh
   const [openReturn, setOpenReturn] = useState(false);
   const [returnQuantities, setReturnQuantities] = useState<{ [productId: number]: number }>({});
   const [returnNotes, setReturnNotes] = useState('');
+  const [settlementMethod, setSettlementMethod] = useState<'StoreCredit' | 'Refund'>('StoreCredit');
+  const [paymentMethod, setPaymentMethod] = useState<string>('Cash');
   const [submittingReturn, setSubmittingReturn] = useState(false);
 
   async function loadOrderDetail() {
@@ -100,6 +102,8 @@ export default function PurchaseOrderDetail({ purchaseOrderId, onBack, onRefresh
     });
     setReturnQuantities(initQties);
     setReturnNotes('');
+    setSettlementMethod('StoreCredit');
+    setPaymentMethod('Cash');
     setOpenReturn(true);
   };
 
@@ -127,6 +131,8 @@ export default function PurchaseOrderDetail({ purchaseOrderId, onBack, onRefresh
         purchaseOrderId: order.id,
         totalAmount,
         notes: returnNotes,
+        settlementMethod,
+        paymentMethod: settlementMethod === 'Refund' ? paymentMethod : undefined,
         items: returnedItems
       });
       setOpenReturn(false);
@@ -398,12 +404,40 @@ export default function PurchaseOrderDetail({ purchaseOrderId, onBack, onRefresh
             </h2>
 
             <div className="space-y-3 text-sm">
-              <div className="flex justify-between items-center">
-                <span className="text-slate-500 dark:text-slate-400">Order Subtotal</span>
-                <span className="font-bold text-slate-900 dark:text-slate-100">
-                  NPR {order.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-              </div>
+              {(() => {
+                const itemsSubtotal = order.items?.reduce((s, i) => s + ((i.quantityOrdered ?? 0) * (i.unitPrice ?? i.costPrice ?? 0)), 0) || 0;
+                return (
+                  <>
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-500 dark:text-slate-400">Items Subtotal</span>
+                      <span className="font-bold text-slate-900 dark:text-slate-100">
+                        NPR {itemsSubtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+
+                    {order.charges && order.charges.length > 0 && (
+                      <div className="space-y-1.5 py-1 border-t border-b border-slate-100 dark:border-slate-800">
+                        <span className="text-2xs font-extrabold uppercase tracking-wider text-slate-400 block">Additional Charges</span>
+                        {order.charges.map((ch, idx) => (
+                          <div key={ch.id || idx} className="flex justify-between items-center text-xs">
+                            <span className="text-slate-600 dark:text-slate-400">{ch.chargeName}</span>
+                            <span className="font-semibold text-slate-800 dark:text-slate-200">
+                              + NPR {(ch.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-500 dark:text-slate-400">Order Subtotal</span>
+                      <span className="font-bold text-slate-900 dark:text-slate-100">
+                        NPR {order.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </>
+                );
+              })()}
 
               {totalReturned > 0 && (
                 <div className="flex justify-between items-center text-rose-600 dark:text-rose-400">
@@ -513,6 +547,51 @@ export default function PurchaseOrderDetail({ purchaseOrderId, onBack, onRefresh
                   </div>
                 );
               })}
+            </div>
+
+            <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-lg space-y-3 border border-slate-200/60 dark:border-slate-700/50">
+              <p className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Settlement Option</p>
+              <div className="space-y-2 text-sm">
+                <label className="flex items-center space-x-2.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="settlementMethod"
+                    value="StoreCredit"
+                    checked={settlementMethod === 'StoreCredit'}
+                    onChange={() => setSettlementMethod('StoreCredit')}
+                    className="text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span className="font-medium text-slate-800 dark:text-slate-200">Adjust in Next Purchase (Supplier Credit)</span>
+                </label>
+                <label className="flex items-center space-x-2.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="settlementMethod"
+                    value="Refund"
+                    checked={settlementMethod === 'Refund'}
+                    onChange={() => setSettlementMethod('Refund')}
+                    className="text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span className="font-medium text-slate-800 dark:text-slate-200">Immediate Cash / Check Refund</span>
+                </label>
+              </div>
+
+              {settlementMethod === 'Refund' && (
+                <div className="pt-2 border-t border-slate-200/80 dark:border-slate-700/60">
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    Refund Payment Method
+                  </label>
+                  <select
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value)}
+                    className="w-full text-sm rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="Cash">Cash</option>
+                    <option value="Cheque">Cheque</option>
+                    <option value="Bank Transfer">Bank Transfer</option>
+                  </select>
+                </div>
+              )}
             </div>
 
             <Input

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Trash2, Plus, ArrowDownRight, Clipboard, Eye } from 'lucide-react';
 import { api } from '../api';
-import type { PurchaseOrder, Supplier, Product, PurchaseItem } from '../api';
+import type { PurchaseOrder, Supplier, Product, PurchaseItem, Charge } from '../api';
 import { Button } from '../components/ui/Button';
 import { Dialog } from '../components/ui/Dialog';
 import { Input } from '../components/ui/Input';
@@ -58,6 +58,8 @@ export default function Purchasing() {
   const [poItems, setPoItems] = useState<{ productId: number; quantityOrdered: number; costPrice: number }[]>([
     { productId: 0, quantityOrdered: 1, costPrice: 0 }
   ]);
+  const [masterCharges, setMasterCharges] = useState<Charge[]>([]);
+  const [poCharges, setPoCharges] = useState<{ chargeId?: number; chargeName: string; amount: number }[]>([]);
 
   // Receive Form States
   const [receiveQuantities, setReceiveQuantities] = useState<{ [productId: number]: number }>({});
@@ -86,12 +88,14 @@ export default function Purchasing() {
   async function loadData() {
     setError('');
     try {
-      const [sups, prods] = await Promise.all([
+      const [sups, prods, chs] = await Promise.all([
         api.getSuppliers(),
         api.getProducts(1, 1000),
+        api.getCharges(),
       ]);
       setSuppliers(sups);
       setProducts(prods.items);
+      setMasterCharges(chs);
       if (sups.length > 0) setSelectedSupplierId(sups[0].id!);
     } catch (err: any) {
       setError(err.message || 'Failed to load purchasing data');
@@ -123,6 +127,7 @@ export default function Purchasing() {
     if (suppliers.length > 0) {
       setSelectedSupplierId(suppliers[0].id || 0);
     }
+    setPoCharges([]);
     setOpenCreate(true);
   };
 
@@ -148,6 +153,38 @@ export default function Purchasing() {
     setPoItems(next);
   };
 
+  const handleAddPoCharge = () => {
+    if (masterCharges.length > 0) {
+      const defaultCh = masterCharges[0];
+      setPoCharges([...poCharges, { chargeId: defaultCh.id, chargeName: defaultCh.name, amount: defaultCh.defaultAmount }]);
+    } else {
+      setPoCharges([...poCharges, { chargeName: '', amount: 0 }]);
+    }
+  };
+
+  const handleRemovePoCharge = (index: number) => {
+    const next = [...poCharges];
+    next.splice(index, 1);
+    setPoCharges(next);
+  };
+
+  const handlePoChargeSelect = (index: number, chargeId: number) => {
+    const ch = masterCharges.find(c => c.id === chargeId);
+    const next = [...poCharges];
+    if (ch) {
+      next[index] = { chargeId: ch.id, chargeName: ch.name, amount: ch.defaultAmount };
+    } else {
+      next[index] = { ...next[index], chargeId };
+    }
+    setPoCharges(next);
+  };
+
+  const handlePoChargeChange = (index: number, field: string, value: any) => {
+    const next = [...poCharges];
+    next[index] = { ...next[index], [field]: value };
+    setPoCharges(next);
+  };
+
   const handleSavePo = async () => {
     if (poItems.some(i => i.productId === 0 || i.quantityOrdered <= 0)) {
       alert('Please check all items have valid products and quantities.');
@@ -159,12 +196,20 @@ export default function Purchasing() {
         quantityOrdered: i.quantityOrdered,
         quantityReceived: 0,
         costPrice: i.costPrice,
-        unitPrice: i.costPrice // Using costPrice as unitPrice for simplicity in the PO
+        unitPrice: i.costPrice
       }));
-      const totalAmount = items.reduce((sum, item) => sum + (item.quantityOrdered * item.costPrice), 0);
+      const itemsTotal = items.reduce((sum, item) => sum + (item.quantityOrdered * item.costPrice), 0);
+      const chargesTotal = poCharges.reduce((sum, ch) => sum + (ch.amount || 0), 0);
+      const totalAmount = itemsTotal + chargesTotal;
+
       await api.createPurchaseOrder({
         supplierId: selectedSupplierId,
         items,
+        charges: poCharges.filter(c => c.chargeName.trim() !== '').map(c => ({
+          chargeId: c.chargeId,
+          chargeName: c.chargeName,
+          amount: c.amount
+        })),
         totalAmount
       });
       setOpenCreate(false);
@@ -426,6 +471,76 @@ export default function Purchasing() {
               <Plus size={14} />
               <span>Add Item</span>
             </Button>
+          </div>
+
+          {/* Additional Charges Section */}
+          <div className="border-t border-slate-100 dark:border-slate-800 pt-5">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-4">Additional Charges (Loading, Unloading, Freight, etc.)</h3>
+            
+            <div className="space-y-4 max-h-[200px] overflow-y-auto pr-1">
+              {poCharges.map((ch, idx) => (
+                <div key={idx} className="flex gap-4 items-end">
+                  <div className="flex-1">
+                    {masterCharges.length > 0 ? (
+                      <Select
+                        label="Charge Type"
+                        value={ch.chargeId || 0}
+                        onChange={(e) => handlePoChargeSelect(idx, Number(e.target.value))}
+                      >
+                        {masterCharges.map(mc => <option key={mc.id} value={mc.id}>{mc.name} (Default: NPR {mc.defaultAmount})</option>)}
+                      </Select>
+                    ) : (
+                      <Input
+                        label="Charge Name"
+                        value={ch.chargeName}
+                        onChange={(e) => handlePoChargeChange(idx, 'chargeName', e.target.value)}
+                      />
+                    )}
+                  </div>
+                  <div className="w-36">
+                    <Input
+                      label="Amount (NPR)"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={ch.amount}
+                      onChange={(e) => handlePoChargeChange(idx, 'amount', parseFloat(e.target.value) || 0)}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleRemovePoCharge(idx)}
+                    className="p-2.5 mb-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-xl cursor-pointer transition-colors"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-4 inline-flex items-center space-x-1.5"
+              onClick={handleAddPoCharge}
+            >
+              <Plus size={14} />
+              <span>Add Charge</span>
+            </Button>
+          </div>
+
+          <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center text-sm">
+            <div className="text-slate-500 dark:text-slate-400 space-y-0.5">
+              <p>Items Subtotal: <span className="font-bold text-slate-800 dark:text-slate-200">NPR {poItems.reduce((s, i) => s + (i.quantityOrdered * i.costPrice), 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span></p>
+              <p>Charges Total: <span className="font-bold text-slate-800 dark:text-slate-200">NPR {poCharges.reduce((s, c) => s + (c.amount || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span></p>
+            </div>
+            <div className="text-right">
+              <span className="text-xs uppercase font-extrabold text-slate-400 block">Grand Total</span>
+              <span className="text-lg font-black text-indigo-600 dark:text-indigo-400">
+                NPR {(poItems.reduce((s, i) => s + (i.quantityOrdered * i.costPrice), 0) + poCharges.reduce((s, c) => s + (c.amount || 0), 0)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
           </div>
 
           <div className="flex justify-end space-x-3 pt-5 border-t border-slate-100 dark:border-slate-800">

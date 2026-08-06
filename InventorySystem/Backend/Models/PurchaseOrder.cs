@@ -26,4 +26,6 @@ public class PurchaseOrder
     public string Notes { get; set; } = string.Empty;
     
     public List<PurchaseItem> Items { get; set; } = new();
+    public List<PurchaseOrderCharge> Charges { get; set; } = new();
 }
+

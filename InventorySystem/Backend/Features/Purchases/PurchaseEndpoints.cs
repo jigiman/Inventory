@@ -30,6 +30,7 @@ public static class PurchaseEndpoints
                 .Include(po => po.Supplier)
                 .Include(po => po.Items)
                     .ThenInclude(pi => pi.Product)
+                .Include(po => po.Charges)
                 .AsNoTracking()
                 .AsQueryable();
 
@@ -77,6 +78,7 @@ public static class PurchaseEndpoints
                 .Include(p => p.Supplier)
                 .Include(p => p.Items)
                     .ThenInclude(pi => pi.Product)
+                .Include(p => p.Charges)
                 .AsNoTracking()
                 .FirstOrDefaultAsync(p => p.Id == id);
 
@@ -93,6 +95,10 @@ public static class PurchaseEndpoints
             po.OrderNumber = $"PO-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString()[..4].ToUpper()}";
             po.OrderDate = DateTime.UtcNow;
             po.Status = "Ordered";
+
+            decimal itemsTotal = po.Items.Sum(i => i.QuantityOrdered * i.UnitPrice);
+            decimal chargesTotal = po.Charges != null ? po.Charges.Sum(c => c.Amount) : 0;
+            po.TotalAmount = itemsTotal + chargesTotal;
 
             db.PurchaseOrders.Add(po);
             await db.SaveChangesAsync();
@@ -186,7 +192,29 @@ public static class PurchaseEndpoints
                 pr.TotalAmount = pr.Items.Sum(i => i.Quantity * i.CostPrice);
             }
 
+            if (string.IsNullOrWhiteSpace(pr.SettlementMethod))
+            {
+                pr.SettlementMethod = "StoreCredit";
+            }
+
             db.PurchaseReturns.Add(pr);
+
+            if (pr.SettlementMethod.Equals("Refund", StringComparison.OrdinalIgnoreCase))
+            {
+                var paymentMethod = string.IsNullOrWhiteSpace(pr.PaymentMethod) ? "Cash" : pr.PaymentMethod;
+                var refundPayment = new Payment
+                {
+                    PaymentDate = DateTime.UtcNow,
+                    Amount = pr.TotalAmount,
+                    PaymentMethod = paymentMethod,
+                    Reference = pr.ReturnNumber,
+                    Notes = $"Immediate refund for Purchase Return {pr.ReturnNumber}",
+                    IsRefund = true,
+                    SupplierId = pr.SupplierId,
+                    PurchaseOrderId = pr.PurchaseOrderId
+                };
+                db.Payments.Add(refundPayment);
+            }
 
             foreach (var item in pr.Items)
             {
@@ -245,7 +273,7 @@ public static class PurchaseEndpoints
                     TotalPurchases = totalPurchases,
                     TotalReturns = totalReturns,
                     TotalPaid = totalPaid,
-                    Balance = totalPurchases - totalReturns - totalPaid
+                    Balance = totalPurchases - totalPaid
                 };
             }).Where(r => {
                 var matchesBalance = minBalance == null || Math.Abs(r.Balance) >= minBalance.Value;

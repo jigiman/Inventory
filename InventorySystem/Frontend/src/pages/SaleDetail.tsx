@@ -282,6 +282,17 @@ export default function SaleDetail({ saleId, onBack, onRefreshList }: SaleDetail
                     <span className="font-semibold">- NPR {sale.discountAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                 )}
+                {sale.charges && sale.charges.length > 0 && (
+                  <div className="space-y-1 py-1 border-t border-b border-slate-200/60 dark:border-slate-800">
+                    <span className="text-3xs font-extrabold uppercase tracking-wider text-slate-400 block">Additional Charges</span>
+                    {sale.charges.map((ch, idx) => (
+                      <div key={ch.id || idx} className="flex justify-between text-xs text-indigo-600 dark:text-indigo-400">
+                        <span>{ch.chargeName}:</span>
+                        <span className="font-semibold">+ NPR {(ch.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div className="flex justify-between items-center pt-2 border-t border-slate-200/60 dark:border-slate-800">
                   <span className="text-xs font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400">Total Sale Amount</span>
                   <span className="text-xl font-extrabold text-indigo-700 dark:text-indigo-400">

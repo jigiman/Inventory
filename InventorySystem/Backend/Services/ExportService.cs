@@ -212,6 +212,18 @@ public class ExportService
                             });
                         }
 
+                        if (sale.Charges != null && sale.Charges.Count > 0)
+                        {
+                            foreach (var ch in sale.Charges)
+                            {
+                                summaryCol.Item().Row(r =>
+                                {
+                                    r.RelativeItem().Text($"{ch.ChargeName}:").FontSize(9);
+                                    r.RelativeItem().AlignRight().Text($"+ NPR {ch.Amount:N2}").FontSize(9);
+                                });
+                            }
+                        }
+
                         summaryCol.Item().PaddingVertical(4).LineHorizontal(1).LineColor(Colors.Black);
 
                         summaryCol.Item().Row(r =>

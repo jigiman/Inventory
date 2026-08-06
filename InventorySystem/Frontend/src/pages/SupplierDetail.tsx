@@ -121,8 +121,17 @@ export default function SupplierDetail({ supplierId, onBack, onSelectPurchaseOrd
   const activeOrders = purchaseOrders.filter(po => po.status !== 'Cancelled' && po.status !== 'Draft');
   const totalPurchases = activeOrders.reduce((sum, po) => sum + (po.totalAmount || 0), 0);
   const totalReturns = purchaseReturns.reduce((sum, pr) => sum + (pr.totalAmount || 0), 0);
+  
+  // StoreCredit returns that haven't been cash/check refunded
+  const storeCreditReturns = purchaseReturns
+    .filter(pr => (pr.settlementMethod || 'StoreCredit') === 'StoreCredit')
+    .reduce((sum, pr) => sum + (pr.totalAmount || 0), 0);
+
   const totalPaid = payments.reduce((sum, p) => sum + (p.isRefund ? -p.amount : p.amount), 0);
-  const balance = totalPurchases - totalReturns - totalPaid;
+  
+  // Outstanding Purchase Debt (Does NOT auto-deduct unapplied return credit)
+  const outstandingPurchases = totalPurchases - totalPaid;
+  const balance = outstandingPurchases;
 
   const handleOpenPayment = (isRefund = false) => {
     setFormPayment({
@@ -309,15 +318,15 @@ export default function SupplierDetail({ supplierId, onBack, onSelectPurchaseOrd
 
         <div className="rounded-2xl border border-slate-200/50 bg-white p-5 dark:border-slate-800/60 dark:bg-slate-950/40 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-extrabold uppercase tracking-wider text-slate-400">Total Returns</span>
+            <span className="text-xs font-extrabold uppercase tracking-wider text-slate-400">Available Return Credit</span>
             <div className="rounded-xl bg-amber-50 p-2.5 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
               <RotateCcw size={18} />
             </div>
           </div>
           <p className="mt-3 text-2xl font-black text-amber-600 dark:text-amber-400">
-            NPR {formatCurrency(totalReturns)}
+            NPR {formatCurrency(storeCreditReturns)}
           </p>
-          <span className="text-2xs text-slate-400 mt-1 block">{purchaseReturns.length} Purchase Returns Recorded</span>
+          <span className="text-2xs text-slate-400 mt-1 block">Unapplied Return Credit ({purchaseReturns.length} Returns)</span>
         </div>
 
         <div className="rounded-2xl border border-slate-200/50 bg-white p-5 dark:border-slate-800/60 dark:bg-slate-950/40 shadow-xs">
@@ -336,7 +345,7 @@ export default function SupplierDetail({ supplierId, onBack, onSelectPurchaseOrd
         <div className="rounded-2xl border border-slate-200/50 bg-white p-5 dark:border-slate-800/60 dark:bg-slate-950/40 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-extrabold uppercase tracking-wider text-slate-400">
-              {balance >= 0 ? 'Outstanding Owed' : 'Supplier Credit'}
+              {balance >= 0 ? 'Outstanding Owed' : 'Credit Balance'}
             </span>
             <div className={`rounded-xl p-2.5 ${balance > 0 ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400' : 'bg-cyan-50 text-cyan-600 dark:bg-cyan-950/40 dark:text-cyan-400'}`}>
               <DollarSign size={18} />
@@ -346,7 +355,7 @@ export default function SupplierDetail({ supplierId, onBack, onSelectPurchaseOrd
             NPR {formatCurrency(Math.abs(balance))}
           </p>
           <span className="text-2xs text-slate-400 mt-1 block">
-            {balance > 0 ? 'Current balance payable' : balance < 0 ? 'Credit balance in your favor' : 'Account fully settled'}
+            {balance > 0 ? 'Direct purchase bill balance' : 'Account settled'}
           </span>
         </div>
       </div>

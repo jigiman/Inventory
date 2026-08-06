@@ -11,6 +11,7 @@ using Backend.Features.StockAdjustments;
 using Backend.Features.StockCounts;
 using Backend.Features.Reports;
 using Backend.Features.Settings;
+using Backend.Features.Charges;
 
 namespace Backend.Features;
 
@@ -30,5 +31,6 @@ public static class EndpointsSetup
         app.MapStockCountEndpoints();
         app.MapReportEndpoints();
         app.MapSettingEndpoints();
+        app.MapChargeEndpoints();
     }
 }

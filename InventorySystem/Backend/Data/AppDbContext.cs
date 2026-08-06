@@ -94,6 +94,10 @@ public class AppDbContext : DbContext
     public DbSet<SalesReturnItem> SalesReturnItems => Set<SalesReturnItem>();
     public DbSet<PurchaseReturn> PurchaseReturns => Set<PurchaseReturn>();
     public DbSet<PurchaseReturnItem> PurchaseReturnItems => Set<PurchaseReturnItem>();
+    public DbSet<Charge> Charges => Set<Charge>();
+    public DbSet<PurchaseOrderCharge> PurchaseOrderCharges => Set<PurchaseOrderCharge>();
+    public DbSet<SaleCharge> SaleCharges => Set<SaleCharge>();
+
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

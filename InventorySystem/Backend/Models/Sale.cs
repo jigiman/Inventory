@@ -32,4 +32,6 @@ public class Sale
     public string Notes { get; set; } = string.Empty;
 
     public List<SaleItem> Items { get; set; } = new();
+    public List<SaleCharge> Charges { get; set; } = new();
 }
+

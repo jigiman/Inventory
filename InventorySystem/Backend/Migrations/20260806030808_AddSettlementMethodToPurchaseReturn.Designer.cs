@@ -3,6 +3,7 @@ using System;
 using Backend.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Backend.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260806030808_AddSettlementMethodToPurchaseReturn")]
+    partial class AddSettlementMethodToPurchaseReturn
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.9");
@@ -81,31 +84,6 @@ namespace Backend.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Categories");
-                });
-
-            modelBuilder.Entity("Backend.Models.Charge", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<decimal>("DefaultAmount")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<bool>("IsArchived")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("Charges");
                 });
 
             modelBuilder.Entity("Backend.Models.Customer", b =>
@@ -378,32 +356,6 @@ namespace Backend.Migrations
                     b.ToTable("PurchaseOrders");
                 });
 
-            modelBuilder.Entity("Backend.Models.PurchaseOrderCharge", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<int?>("ChargeId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("ChargeName")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("PurchaseOrderId")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PurchaseOrderId");
-
-                    b.ToTable("PurchaseOrderCharges");
-                });
-
             modelBuilder.Entity("Backend.Models.PurchaseReturn", b =>
                 {
                     b.Property<int>("Id")
@@ -514,32 +466,6 @@ namespace Backend.Migrations
                     b.HasIndex("SaleDate");
 
                     b.ToTable("Sales");
-                });
-
-            modelBuilder.Entity("Backend.Models.SaleCharge", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<int?>("ChargeId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("ChargeName")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("SaleId")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("SaleId");
-
-                    b.ToTable("SaleCharges");
                 });
 
             modelBuilder.Entity("Backend.Models.SaleItem", b =>
@@ -940,17 +866,6 @@ namespace Backend.Migrations
                     b.Navigation("Supplier");
                 });
 
-            modelBuilder.Entity("Backend.Models.PurchaseOrderCharge", b =>
-                {
-                    b.HasOne("Backend.Models.PurchaseOrder", "PurchaseOrder")
-                        .WithMany("Charges")
-                        .HasForeignKey("PurchaseOrderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("PurchaseOrder");
-                });
-
             modelBuilder.Entity("Backend.Models.PurchaseReturn", b =>
                 {
                     b.HasOne("Backend.Models.PurchaseOrder", "PurchaseOrder")
@@ -996,17 +911,6 @@ namespace Backend.Migrations
                         .IsRequired();
 
                     b.Navigation("Customer");
-                });
-
-            modelBuilder.Entity("Backend.Models.SaleCharge", b =>
-                {
-                    b.HasOne("Backend.Models.Sale", "Sale")
-                        .WithMany("Charges")
-                        .HasForeignKey("SaleId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Sale");
                 });
 
             modelBuilder.Entity("Backend.Models.SaleItem", b =>
@@ -1116,8 +1020,6 @@ namespace Backend.Migrations
 
             modelBuilder.Entity("Backend.Models.PurchaseOrder", b =>
                 {
-                    b.Navigation("Charges");
-
                     b.Navigation("Items");
                 });
 
@@ -1128,8 +1030,6 @@ namespace Backend.Migrations
 
             modelBuilder.Entity("Backend.Models.Sale", b =>
                 {
-                    b.Navigation("Charges");
-
                     b.Navigation("Items");
                 });
 

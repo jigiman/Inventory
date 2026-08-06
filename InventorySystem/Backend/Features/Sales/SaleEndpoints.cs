@@ -32,6 +32,7 @@ public static class SaleEndpoints
                     .ThenInclude(si => si.Product)
                 .Include(s => s.Items)
                     .ThenInclude(si => si.Supplier)
+                .Include(s => s.Charges)
                 .AsNoTracking()
                 .AsQueryable();
 
@@ -81,6 +82,7 @@ public static class SaleEndpoints
                     .ThenInclude(si => si.Product)
                 .Include(s => s.Items)
                     .ThenInclude(si => si.Supplier)
+                .Include(s => s.Charges)
                 .AsNoTracking()
                 .FirstOrDefaultAsync(s => s.Id == id);
 
@@ -96,6 +98,7 @@ public static class SaleEndpoints
                     .ThenInclude(si => si.Product)
                 .Include(s => s.Items)
                     .ThenInclude(si => si.Supplier)
+                .Include(s => s.Charges)
                 .AsNoTracking()
                 .FirstOrDefaultAsync(s => s.Id == id);
 
@@ -177,7 +180,8 @@ public static class SaleEndpoints
             }
 
             sale.SubTotal = itemsSubTotal;
-            sale.TotalAmount = Math.Max(0, itemsSubTotal - sale.DiscountAmount);
+            decimal totalCharges = sale.Charges != null ? sale.Charges.Sum(c => c.Amount) : 0;
+            sale.TotalAmount = Math.Max(0, itemsSubTotal - sale.DiscountAmount) + totalCharges;
             sale.Items = resolvedItems;
             db.Sales.Add(sale);
 

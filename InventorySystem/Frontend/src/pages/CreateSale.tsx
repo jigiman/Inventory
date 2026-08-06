@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Trash2, Plus, ArrowLeft, ShoppingBag } from 'lucide-react';
 import { api } from '../api';
-import type { Customer, Product, SaleItem } from '../api';
+import type { Customer, Product, SaleItem, Charge } from '../api';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
@@ -42,6 +42,8 @@ export default function CreateSale({ onBack, onSuccess }: CreateSaleProps) {
   const [selectedCustomerId, setSelectedCustomerId] = useState<number>(0);
   const [saleItems, setSaleItems] = useState<{ productId: number; quantity: number; unitPrice: number; discountType: 'amount' | 'percentage'; discountValue: number; supplierId?: number }[]>([]);
   const [overallDiscount, setOverallDiscount] = useState<number>(0);
+  const [masterCharges, setMasterCharges] = useState<Charge[]>([]);
+  const [saleCharges, setSaleCharges] = useState<{ chargeId?: number; chargeName: string; amount: number }[]>([]);
   const [availableBatches, setAvailableBatches] = useState<{ [productId: number]: any[] }>({});
 
   const fetchBatchesForProduct = async (productId: number) => {
@@ -63,12 +65,14 @@ export default function CreateSale({ onBack, onSuccess }: CreateSaleProps) {
     setLoading(true);
     setError('');
     try {
-      const [custs, prods] = await Promise.all([
+      const [custs, prods, chs] = await Promise.all([
         api.getCustomers(),
         api.getProducts(1, 1000),
+        api.getCharges(),
       ]);
       setCustomers(custs);
       setProducts(prods.items);
+      setMasterCharges(chs);
 
       const mappedSelectable = prods.items.flatMap(p => 
         p.variants && p.variants.length > 0 
@@ -169,6 +173,38 @@ export default function CreateSale({ onBack, onSuccess }: CreateSaleProps) {
     return { gross, discountAmount, discountPercentage, net: Math.max(0, gross - discountAmount) };
   };
 
+  const handleAddSaleCharge = () => {
+    if (masterCharges.length > 0) {
+      const defaultCh = masterCharges[0];
+      setSaleCharges([...saleCharges, { chargeId: defaultCh.id, chargeName: defaultCh.name, amount: defaultCh.defaultAmount }]);
+    } else {
+      setSaleCharges([...saleCharges, { chargeName: '', amount: 0 }]);
+    }
+  };
+
+  const handleRemoveSaleCharge = (index: number) => {
+    const next = [...saleCharges];
+    next.splice(index, 1);
+    setSaleCharges(next);
+  };
+
+  const handleSaleChargeSelect = (index: number, chargeId: number) => {
+    const ch = masterCharges.find(c => c.id === chargeId);
+    const next = [...saleCharges];
+    if (ch) {
+      next[index] = { chargeId: ch.id, chargeName: ch.name, amount: ch.defaultAmount };
+    } else {
+      next[index] = { ...next[index], chargeId };
+    }
+    setSaleCharges(next);
+  };
+
+  const handleSaleChargeChange = (index: number, field: string, value: any) => {
+    const next = [...saleCharges];
+    next[index] = { ...next[index], [field]: value };
+    setSaleCharges(next);
+  };
+
   const handleSaveSale = async (e: React.FormEvent) => {
     e.preventDefault();
     if (saleItems.some(i => i.productId === 0 || i.quantity <= 0)) {
@@ -190,11 +226,17 @@ export default function CreateSale({ onBack, onSuccess }: CreateSaleProps) {
       });
 
       const subTotal = items.reduce((sum, item) => sum + Math.max(0, (item.quantity * item.unitPrice) - (item.discountAmount || 0)), 0);
-      const totalAmount = Math.max(0, subTotal - (overallDiscount || 0));
+      const totalCharges = saleCharges.reduce((sum, ch) => sum + (ch.amount || 0), 0);
+      const totalAmount = Math.max(0, subTotal - (overallDiscount || 0)) + totalCharges;
 
       await api.createSale({
         customerId: selectedCustomerId,
         items,
+        charges: saleCharges.filter(c => c.chargeName.trim() !== '').map(c => ({
+          chargeId: c.chargeId,
+          chargeName: c.chargeName,
+          amount: c.amount
+        })),
         subTotal,
         discountAmount: overallDiscount || 0,
         totalAmount
@@ -431,6 +473,66 @@ export default function CreateSale({ onBack, onSuccess }: CreateSaleProps) {
             ))}
           </div>
 
+          {/* Additional Charges Section */}
+          <div className="border-t border-slate-100 dark:border-slate-800 pt-5 space-y-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Additional Charges (Loading, Unloading, Freight, etc.)</h3>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="inline-flex items-center space-x-1 text-xs"
+                onClick={handleAddSaleCharge}
+              >
+                <Plus size={14} />
+                <span>Add Charge</span>
+              </Button>
+            </div>
+
+            {saleCharges.length > 0 && (
+              <div className="space-y-3 max-h-[200px] overflow-y-auto pr-1">
+                {saleCharges.map((ch, idx) => (
+                  <div key={idx} className="flex gap-4 items-end bg-slate-50/50 dark:bg-slate-950/40 p-3 rounded-xl border border-slate-200/50 dark:border-slate-800">
+                    <div className="flex-1">
+                      {masterCharges.length > 0 ? (
+                        <Select
+                          label="Charge Type"
+                          value={ch.chargeId || 0}
+                          onChange={(e) => handleSaleChargeSelect(idx, Number(e.target.value))}
+                        >
+                          {masterCharges.map(mc => <option key={mc.id} value={mc.id}>{mc.name} (Default: NPR {mc.defaultAmount})</option>)}
+                        </Select>
+                      ) : (
+                        <Input
+                          label="Charge Name"
+                          value={ch.chargeName}
+                          onChange={(e) => handleSaleChargeChange(idx, 'chargeName', e.target.value)}
+                        />
+                      )}
+                    </div>
+                    <div className="w-36">
+                      <Input
+                        label="Amount (NPR)"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={ch.amount}
+                        onChange={(e) => handleSaleChargeChange(idx, 'amount', parseFloat(e.target.value) || 0)}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveSaleCharge(idx)}
+                      className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-lg cursor-pointer transition-colors"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Breakdown & Bill Discount */}
           <div className="flex justify-end pt-4 border-t border-slate-100 dark:border-slate-800">
             {(() => {
@@ -442,7 +544,8 @@ export default function CreateSale({ onBack, onSuccess }: CreateSaleProps) {
                 itemsDiscounts += discountAmount;
               });
               const subTotal = Math.max(0, itemsGross - itemsDiscounts);
-              const finalTotal = Math.max(0, subTotal - (overallDiscount || 0));
+              const chargesTotal = saleCharges.reduce((sum, ch) => sum + (ch.amount || 0), 0);
+              const finalTotal = Math.max(0, subTotal - (overallDiscount || 0)) + chargesTotal;
 
               return (
                 <div className="w-full md:w-80 space-y-3 bg-slate-50 dark:bg-slate-950/60 p-5 rounded-2xl border border-slate-200/60 dark:border-slate-800">
@@ -470,6 +573,12 @@ export default function CreateSale({ onBack, onSuccess }: CreateSaleProps) {
                       onChange={(e) => setOverallDiscount(Math.max(0, parseFloat(e.target.value) || 0))}
                     />
                   </div>
+                  {chargesTotal > 0 && (
+                    <div className="flex justify-between text-xs text-indigo-600 dark:text-indigo-400 pt-2 border-t border-slate-200/60 dark:border-slate-800">
+                      <span>Total Additional Charges:</span>
+                      <span className="font-semibold">+ NPR {chargesTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between items-center pt-3 border-t border-slate-200/60 dark:border-slate-800">
                     <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Final Payable Total</span>
                     <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400">

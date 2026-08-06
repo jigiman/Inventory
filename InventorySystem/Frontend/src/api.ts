@@ -111,6 +111,30 @@ export interface Unit {
   name: string;
 }
 
+export interface Charge {
+  id?: number;
+  name: string;
+  defaultAmount: number;
+  description?: string;
+  isArchived?: boolean;
+}
+
+export interface PurchaseOrderCharge {
+  id?: number;
+  purchaseOrderId?: number;
+  chargeId?: number;
+  chargeName: string;
+  amount: number;
+}
+
+export interface SaleCharge {
+  id?: number;
+  saleId?: number;
+  chargeId?: number;
+  chargeName: string;
+  amount: number;
+}
+
 export interface Supplier {
   id?: number;
   name: string;
@@ -187,6 +211,7 @@ export interface PurchaseOrder {
   totalAmount: number;
   notes?: string;
   items: PurchaseItem[];
+  charges?: PurchaseOrderCharge[];
 }
 
 export interface SaleItem {
@@ -213,6 +238,7 @@ export interface Sale {
   discountAmount?: number;
   totalAmount: number;
   items: SaleItem[];
+  charges?: SaleCharge[];
 }
 
 export interface Payment {
@@ -270,6 +296,8 @@ export interface PurchaseReturn {
   returnDate?: string;
   totalAmount: number;
   notes: string;
+  settlementMethod?: string;
+  paymentMethod?: string;
   items: PurchaseReturnItem[];
 }
 
@@ -370,6 +398,12 @@ export const api = {
   createUnit: (unit: Unit) => request<Unit>('/api/units', { method: 'POST', body: JSON.stringify(unit) }),
   updateUnit: (id: number, unit: Unit) => request<Unit>(`/api/units/${id}`, { method: 'PUT', body: JSON.stringify(unit) }),
   deleteUnit: (id: number) => request<void>(`/api/units/${id}`, { method: 'DELETE' }),
+
+  // Charges
+  getCharges: (all = false) => request<Charge[]>(all ? '/api/charges/all' : '/api/charges'),
+  createCharge: (charge: Charge) => request<Charge>('/api/charges', { method: 'POST', body: JSON.stringify(charge) }),
+  updateCharge: (id: number, charge: Charge) => request<Charge>(`/api/charges/${id}`, { method: 'PUT', body: JSON.stringify(charge) }),
+  deleteCharge: (id: number) => request<void>(`/api/charges/${id}`, { method: 'DELETE' }),
 
   // Suppliers
   getSuppliers: () => request<Supplier[]>('/api/suppliers'),
